@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TERRA — Terrain-Aware Musculoskeletal Locomotion</title>
+  <meta name="description" content="TERRA reconstructs terrain from motion, retargets human movement to a musculoskeletal body, and learns muscle-actuated control across diverse terrain.">
+  <meta name="theme-color" content="#216c59">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="TERRA: Terrain-Aware Reconstruction, Retargeting and Control for Musculoskeletal Locomotion">
+  <meta property="og:description" content="From scene-less motion data to muscle-actuated locomotion over diverse terrain.">
+  <meta property="og:url" content="https://merc-s.github.io/terra/">
+  <meta property="og:image" content="https://merc-s.github.io/terra/assets/images/overview.webp">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://merc-s.github.io/terra/">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/fonts/charter_regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/charter_bold.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="styles.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#abstract">Skip to abstract</a>
+<header class="hero" id="top">
+  <video class="hero-video" muted loop playsinline preload="none" poster="assets/images/overview.webp" data-src="assets/videos/overview.mp4" aria-hidden="true"></video>
+  <div class="hero-shade"></div>
+  <nav class="nav" aria-label="Main navigation">
+    <a class="wordmark" href="#top" aria-label="TERRA home">TERRA</a>
+    <div class="nav-links"><a href="#abstract">Abstract</a><a href="#methodology">Methodology</a><a href="#results">Results</a><a href="#citation">BibTeX</a></div>
+  </nav>
+  <div class="hero-content">
+    <h1><span class="title-mark">TERRA<span class="visually-hidden">:</span></span>Terrain-Aware Reconstruction, Retargeting and Control for Musculoskeletal Locomotion</h1>
+    <p class="authors">Merkourios Simos · Chengkun Li · Bianca Ziliotto · Alexander Mathis</p>
+    <a class="hero-link" href="https://github.com/merc-s/terra">Project repository <span aria-hidden="true">↗</span></a>
+  </div>
+  <div class="hero-bottom"><a href="#abstract">Explore the research <span aria-hidden="true">↓</span></a><button class="hero-toggle" type="button" hidden>Play background</button></div>
+</header>
+<main>
+  <section class="section abstract" id="abstract" aria-labelledby="abstract-heading">
+    <h2 id="abstract-heading">Abstract</h2>
+    <p>Recent advances in musculoskeletal modeling and reinforcement learning have enabled muscle-actuated agents to reproduce increasingly complex human motions. Yet these capabilities remain largely confined to flat ground, in part because motion datasets rarely include aligned terrain geometry and because retargeting terrain interactions to complex musculoskeletal bodies is challenging.</p>
+<p>We present TERRA, an end-to-end pipeline for terrain-aware retargeting and control of musculoskeletal locomotion. From kinematic trajectories alone, TERRA combines terrain priors, estimated contacts, and negative free-space evidence to recover task-relevant support geometry. TERRA further considers anatomical, tendon-continuity, and contact constraints during retargeting. Using the resulting motion-terrain pairs from five datasets, we successfully train a single muscle-actuated control policy on the 9.4-hour training split of an 11.3-hour locomotion library. Across reconstruction, retargeting, and held-out tracking benchmarks, TERRA improves terrain accuracy, sharply reduces anatomical and interaction violations, and achieves the highest pooled completion rate over supported terrain families. Overall, TERRA provides a practical route from scene-less motion data to muscle-actuated locomotion over diverse non-flat terrain.</p>
+  </section>
+  <section class="section methodology" id="methodology" aria-labelledby="methodology-heading">
+    <h2 id="methodology-heading">Methodology</h2>
+    <figure>
+      <a href="assets/images/methodology.pdf" aria-label="Open the methodology figure as a full-resolution PDF"><img src="assets/images/methodology.webp" width="2400" height="807" loading="lazy" alt="TERRA pipeline: heterogeneous motion inputs are converted to SMPL-H, terrain is reconstructed, motion is retargeted with biomechanical constraints, and reinforcement learning trains muscle-actuated control, followed by EMG and ground-reaction-force validation."></a>
+      <figcaption>From motion to terrain, retargeting, and control. TERRA recovers support geometry from kinematic trajectories, retargets motion with anatomical and contact constraints, and trains a muscle-actuated tracking policy.</figcaption>
+    </figure>
+  </section>
+  <section class="section results" id="results" aria-labelledby="results-heading">
+    <h2 id="results-heading">Results</h2>
+    <div class="result-block">
+      <h3>Terrain reconstruction</h3>
+      <p class="description">Recovering task-relevant support geometry from motion alone. Compare ground-truth terrain with the Voronoi baseline and TERRA for stairs, ramps, individual supports, and seats.</p>
+      <figure class="comparison">
+        <div class="comparison-labels" aria-label="Methods from left to right"><span>Ground truth (GT)</span><span>Voronoi</span><span>TERRA</span></div>
+        <video controls muted loop playsinline preload="none" poster="assets/images/reconstruction.webp" aria-label="Terrain reconstruction: ground truth, Voronoi, and TERRA from left to right"><source src="assets/videos/reconstruction.mp4" type="video/mp4"><a href="assets/videos/reconstruction.mp4">Watch Terrain reconstruction: ground truth, Voronoi, and TERRA from left to right</a></video>
+        <figcaption>Stairs and ramps, followed by individual supports and seats. The body provides a common scale reference.</figcaption>
+      </figure>
+    </div>
+    <div class="result-block">
+      <h3>Terrain-aware retargeting</h3>
+      <p class="description">Preserving motion while accounting for anatomy and contact with the terrain. Compare GMR, OmniRetarget, and TERRA on three example motions.</p>
+      <div class="example-selector" role="group" aria-label="Choose a retargeting example" hidden>
+        <button type="button" aria-controls="retarget-stairs" aria-pressed="true">Stairs</button>
+        <button type="button" aria-controls="retarget-ramps" aria-pressed="false">Ramps</button>
+        <button type="button" aria-controls="retarget-platforms" aria-pressed="false">Platforms</button>
+      </div>
+      <figure class="comparison retarget-panel" id="retarget-stairs">
+<div class="comparison-labels" aria-label="Methods from left to right"><span>GMR</span><span>OmniRetarget</span><span>TERRA</span></div>
+<video controls muted loop playsinline preload="none" poster="assets/images/retargeting-stairs.webp" aria-label="Stair ascent retargeting comparison: GMR, OmniRetarget, and TERRA from left to right"><source src="assets/videos/retargeting-stairs.mp4" type="video/mp4"><a href="assets/videos/retargeting-stairs.mp4">Watch Stair ascent retargeting comparison: GMR, OmniRetarget, and TERRA from left to right</a></video>
+<figcaption>Stair ascent. The same source motion retargeted to the musculoskeletal model.</figcaption></figure>
+<figure class="comparison retarget-panel" id="retarget-ramps">
+<div class="comparison-labels" aria-label="Methods from left to right"><span>GMR</span><span>OmniRetarget</span><span>TERRA</span></div>
+<video controls muted loop playsinline preload="none" poster="assets/images/retargeting-ramps.webp" aria-label="Ramp ascent retargeting comparison: GMR, OmniRetarget, and TERRA from left to right"><source src="assets/videos/retargeting-ramps.mp4" type="video/mp4"><a href="assets/videos/retargeting-ramps.mp4">Watch Ramp ascent retargeting comparison: GMR, OmniRetarget, and TERRA from left to right</a></video>
+<figcaption>Ramp ascent. The same source motion retargeted to the musculoskeletal model.</figcaption></figure>
+<figure class="comparison retarget-panel" id="retarget-platforms">
+<div class="comparison-labels" aria-label="Methods from left to right"><span>GMR</span><span>OmniRetarget</span><span>TERRA</span></div>
+<video controls muted loop playsinline preload="none" poster="assets/images/retargeting-platforms.webp" aria-label="Platform traversal retargeting comparison: GMR, OmniRetarget, and TERRA from left to right"><source src="assets/videos/retargeting-platforms.mp4" type="video/mp4"><a href="assets/videos/retargeting-platforms.mp4">Watch Platform traversal retargeting comparison: GMR, OmniRetarget, and TERRA from left to right</a></video>
+<figcaption>Platform traversal. The same source motion retargeted to the musculoskeletal model.</figcaption></figure>
+    </div>
+    <div class="result-block" id="policy-examples">
+      <h3>Muscle-actuated control</h3>
+      <p class="description">One muscle-actuated policy tracks diverse motions across terrain. Explore 18 examples spanning steep ramps, stairs, seats, individual platforms, narrow beams, and uneven terrain.</p>
+      <div class="motion-browser">
+        <div class="motion-controls" hidden>
+          <label for="terrain-category">Terrain category
+            <select id="terrain-category" aria-controls="policy-gallery">
+              <option value="Ramps">Ramps</option>
+              <option value="Stairs">Stairs</option>
+              <option value="Seats">Seats</option>
+              <option value="Individual platforms">Individual platforms</option>
+              <option value="Beams">Beams</option>
+              <option value="Other terrain">Other terrain</option>
+            </select>
+          </label>
+          <label for="policy-motion">Motion
+            <select id="policy-motion" aria-controls="policy-gallery"></select>
+          </label>
+        </div>
+        <p class="visually-hidden" id="policy-selection-status" role="status" aria-live="polite"></p>
+        <div class="policy-gallery" id="policy-gallery">
+        <figure class="policy-panel" id="policy-s00-steep-ascent-ekut-slp201" data-terrain="Ramps" data-label="Steep ascent (EKUT SLP201)">
+          <video controls muted loop playsinline preload="none" poster="assets/images/policy/s00-steep-ascent-ekut-slp201.webp" aria-label="Steep ascent (EKUT SLP201) policy rollout"><source src="assets/videos/policy/s00-steep-ascent-ekut-slp201.mp4" type="video/mp4"><a href="assets/videos/policy/s00-steep-ascent-ekut-slp201.mp4">Watch Steep ascent (EKUT SLP201)</a></video>
+          <figcaption>Steep ascent (EKUT SLP201)<span>Walking up a 20° ramp.</span></figcaption>
+        </figure>
+        <figure class="policy-panel" id="policy-s02-steep-ascent-ekut-slp203" data-terrain="Ramps" data-label="Steep ascent (EKUT SLP203)">
+          <video controls muted loop playsinline preload="none" poster="assets/images/policy/s02-steep-ascent-ekut-slp203.webp" aria-label="Steep ascent (EKUT SLP203) policy rollout"><source src="assets/videos/policy/s02-steep-ascent-ekut-slp203.mp4" type="video/mp4"><a href="assets/videos/policy/s02-steep-ascent-ekut-slp203.mp4">Watch Steep ascent (EKUT SLP203)</a></video>
+          <figcaption>Steep ascent (EKUT SLP203)<span>Walking up a 19° ramp.</span></figcaption>
+        </figure>
+        <figure class="policy-panel" id="policy-s04-steep-descent-ekut-slpd201" data-terrain="Ramps" data-label="Steep descent (EKUT SLPD201)">
+          <video controls muted loop playsinline preload="none" poster="assets/images/policy/s04-steep-descent-ekut-slpd201.webp" aria-label="Steep descent (EKUT SLPD201) policy rollout"><source src="assets/videos/policy/s04-steep-descent-ekut-slpd201.mp4" type="video/mp4"><a href="assets/videos/policy/s04-steep-descent-ekut-slpd201.mp4">Watch Steep descent (EKUT SLPD201)</a></video>
+          <figcaption>Steep descent (EKUT SLPD201)<span>Walking down a 20° ramp.</span></figcaption>
+        </figure>
+        <figure class="policy-panel" id="policy-s07-steep-descent-ekut-slpd204" data-terrain="Ramps" data-label="Steep descent (EKUT SLPD204)">
+          <video controls muted loop playsinline preload="none" poster="assets/images/policy/s07-steep-descent-ekut-slpd204.webp" aria-label="Steep descent (EKUT SLPD204) policy rollout"><source src="assets/videos/policy/s07-steep-descent-ekut-slpd204.mp4" type="video/mp4"><a href="assets/videos/policy/s07-steep-descent-ekut-slpd204.mp4">Watch Steep descent (EKUT SLPD204)</a></video>
+          <figcaption>Steep descent (EKUT SLPD204)<span>Walking down a 21° ramp.</span></figcaption>
+        </figure>
+        <figure class="policy-panel" id="policy-062-upstairs-amass-kit" data-terrain="Stairs" data-label="Upstairs (AMASS/KIT)">
+          <video controls muted loop playsinline preload="none" poster="assets/images/policy/062-upstairs-amass-kit.webp" aria-label="Upstairs (AMASS/KIT) policy rollout"><source src="assets/videos/policy/062-upstairs-amass-kit.mp4" type="video/mp4"><a href="assets/videos/policy/062-upstairs-amass-kit.mp4">Watch Upstairs (AMASS/KIT)</a></video>
+          <figcaption>Upstairs (AMASS/KIT)<span>Ascending a staircase.</span></figcaption>
+        </figure>
+        <figure class="policy-panel" id="policy-078-upstairs-darmstadt" data-terrain="Stairs" data-label="Upstairs (Darmstadt)">
+          <video controls muted loop playsinline preload="none" poster="assets/images/policy/078-upstairs-darmstadt.webp" aria-label="Upstairs (Darmstadt) policy rollout"><source src="assets/videos/policy/078-upstairs-darmstadt.mp4" type="video/mp4"><a href="assets/videos/policy/078-upstairs-darmstadt.mp4">Watch Upstairs (Darmstadt)</a></video>
+          <figcaption>Upstairs (Darmstadt)<span>Ascending a staircase.</span></figcaption>
+        </figure>
+        <figure class="policy-panel" id="policy-092-downstairs-darmstadt" data-terrain="Stairs" data-label="Downstairs (Darmstadt)">
+          <video controls muted loop playsinline preload="none" poster="assets/images/policy/092-downstairs-darmstadt.webp" aria-label="Downstairs (Darmstadt) policy rollout"><source src="assets/videos/policy/092-downstairs-darmstadt.mp4" type="video/mp4"><a href="assets/videos/policy/092-downstairs-darmstadt.mp4">Watch Downstairs (Darmstadt)</a></video>
+          <figcaption>Downstairs (Darmstadt)<span>Descending a staircase.</span></figcaption>
+        </figure>
+        <figure class="policy-panel" id="policy-084-downstairs-amass-kit" data-terrain="Stairs" data-label="Downstairs (AMASS/KIT)">
+          <video controls muted loop playsinline preload="none" poster="assets/images/policy/084-downstairs-amass-kit.webp" aria-label="Downstairs (AMASS/KIT) policy rollout"><source src="assets/videos/policy/084-downstairs-amass-kit.mp4" type="video/mp4"><a href="assets/videos/policy/084-downstairs-amass-kit.mp4">Watch Downstairs (AMASS/KIT)</a></video>
+          <figcaption>Downstairs (AMASS/KIT)<span>Descending a staircase.</span></figcaption>
+        </figure>
+        <figure class="policy-panel" id="policy-099-up-and-down-amass-kit" data-terrain="Stairs" data-label="Up and down (AMASS/KIT)">
+          <video controls muted loop playsinline preload="none" poster="assets/images/policy/099-up-and-down-amass-kit.webp" aria-label="Up and down (AMASS/KIT) policy rollout"><source src="assets/videos/policy/099-up-and-down-amass-kit.mp4" type="video/mp4"><a href="assets/videos/policy/099-up-and-down-amass-kit.mp4">Watch Up and down (AMASS/KIT)</a></video>
+          <figcaption>Up and down (AMASS/KIT)<span>Climbing up and down stairs.</span></figcaption>
+        </figure>
+        <figure class="policy-panel" id="policy-111-sit-and-stand-amass-biomotionlab" data-terrain="Seats" data-label="Sit and stand (AMASS/BioMotionLab)">
+          <video controls muted loop playsinline preload="none" poster="assets/images/policy/111-sit-and-stand-amass-biomotionlab.webp" aria-label="Sit and stand (AMASS/BioMotionLab) policy rollout"><source src="assets/videos/policy/111-sit-and-stand-amass-biomotionlab.mp4" type="video/mp4"><a href="assets/videos/policy/111-sit-and-stand-amass-biomotionlab.mp4">Watch Sit and stand (AMASS/BioMotionLab)</a></video>
+          <figcaption>Sit and stand (AMASS/BioMotionLab)<span>Sitting down and standing up.</span></figcaption>
+        </figure>
+        <figure class="policy-panel" id="policy-107-reseating-amass-eyesjapan" data-terrain="Seats" data-label="Reseating (AMASS/EyesJapan)">
+          <video controls muted loop playsinline preload="none" poster="assets/images/policy/107-reseating-amass-eyesjapan.webp" aria-label="Reseating (AMASS/EyesJapan) policy rollout"><source src="assets/videos/policy/107-reseating-amass-eyesjapan.mp4" type="video/mp4"><a href="assets/videos/policy/107-reseating-amass-eyesjapan.mp4">Watch Reseating (AMASS/EyesJapan)</a></video>
+          <figcaption>Reseating (AMASS/EyesJapan)<span>Adjusting position while seated.</span></figcaption>
+        </figure>
+        <figure class="policy-panel" id="policy-151-platform-traversal-prism" data-terrain="Individual platforms" data-label="Platform traversal (PRISM)">
+          <video controls muted loop playsinline preload="none" poster="assets/images/policy/151-platform-traversal-prism.webp" aria-label="Platform traversal (PRISM) policy rollout"><source src="assets/videos/policy/151-platform-traversal-prism.mp4" type="video/mp4"><a href="assets/videos/policy/151-platform-traversal-prism.mp4">Watch Platform traversal (PRISM)</a></video>
+          <figcaption>Platform traversal (PRISM)<span>Traversing individual supports.</span></figcaption>
+        </figure>
+        <figure class="policy-panel" id="policy-163-stepping-stones-amass-kit" data-terrain="Individual platforms" data-label="Stepping stones (AMASS/KIT)">
+          <video controls muted loop playsinline preload="none" poster="assets/images/policy/163-stepping-stones-amass-kit.webp" aria-label="Stepping stones (AMASS/KIT) policy rollout"><source src="assets/videos/policy/163-stepping-stones-amass-kit.mp4" type="video/mp4"><a href="assets/videos/policy/163-stepping-stones-amass-kit.mp4">Watch Stepping stones (AMASS/KIT)</a></video>
+          <figcaption>Stepping stones (AMASS/KIT)<span>Moving between separated stepping stones.</span></figcaption>
+        </figure>
+        <figure class="policy-panel" id="policy-175-gapped-beam-crossing-amass-ekut" data-terrain="Beams" data-label="Gapped beam crossing (AMASS/EKUT)">
+          <video controls muted loop playsinline preload="none" poster="assets/images/policy/175-gapped-beam-crossing-amass-ekut.webp" aria-label="Gapped beam crossing (AMASS/EKUT) policy rollout"><source src="assets/videos/policy/175-gapped-beam-crossing-amass-ekut.mp4" type="video/mp4"><a href="assets/videos/policy/175-gapped-beam-crossing-amass-ekut.mp4">Watch Gapped beam crossing (AMASS/EKUT)</a></video>
+          <figcaption>Gapped beam crossing (AMASS/EKUT)<span>Crossing narrow beams separated by gaps.</span></figcaption>
+        </figure>
+        <figure class="policy-panel" id="policy-168-continuous-beam-crossing-amass-kit" data-terrain="Beams" data-label="Continuous beam crossing (AMASS/KIT)">
+          <video controls muted loop playsinline preload="none" poster="assets/images/policy/168-continuous-beam-crossing-amass-kit.webp" aria-label="Continuous beam crossing (AMASS/KIT) policy rollout"><source src="assets/videos/policy/168-continuous-beam-crossing-amass-kit.mp4" type="video/mp4"><a href="assets/videos/policy/168-continuous-beam-crossing-amass-kit.mp4">Watch Continuous beam crossing (AMASS/KIT)</a></video>
+          <figcaption>Continuous beam crossing (AMASS/KIT)<span>Walking along a continuous narrow beam.</span></figcaption>
+        </figure>
+        <figure class="policy-panel" id="policy-185-beam-balance-amass-kit" data-terrain="Beams" data-label="Beam balance (AMASS/KIT)">
+          <video controls muted loop playsinline preload="none" poster="assets/images/policy/185-beam-balance-amass-kit.webp" aria-label="Beam balance (AMASS/KIT) policy rollout"><source src="assets/videos/policy/185-beam-balance-amass-kit.mp4" type="video/mp4"><a href="assets/videos/policy/185-beam-balance-amass-kit.mp4">Watch Beam balance (AMASS/KIT)</a></video>
+          <figcaption>Beam balance (AMASS/KIT)<span>Balancing on a narrow beam.</span></figcaption>
+        </figure>
+        <figure class="policy-panel" id="policy-190-low-steps-amass-ekut" data-terrain="Other terrain" data-label="Low steps (AMASS/EKUT)">
+          <video controls muted loop playsinline preload="none" poster="assets/images/policy/190-low-steps-amass-ekut.webp" aria-label="Low steps (AMASS/EKUT) policy rollout"><source src="assets/videos/policy/190-low-steps-amass-ekut.mp4" type="video/mp4"><a href="assets/videos/policy/190-low-steps-amass-ekut.mp4">Watch Low steps (AMASS/EKUT)</a></video>
+          <figcaption>Low steps (AMASS/EKUT)<span>Stepping across low terrain changes.</span></figcaption>
+        </figure>
+        <figure class="policy-panel" id="policy-199-uneven-terrain-amass-cmu" data-terrain="Other terrain" data-label="Uneven terrain (AMASS/CMU)">
+          <video controls muted loop playsinline preload="none" poster="assets/images/policy/199-uneven-terrain-amass-cmu.webp" aria-label="Uneven terrain (AMASS/CMU) policy rollout"><source src="assets/videos/policy/199-uneven-terrain-amass-cmu.mp4" type="video/mp4"><a href="assets/videos/policy/199-uneven-terrain-amass-cmu.mp4">Watch Uneven terrain (AMASS/CMU)</a></video>
+          <figcaption>Uneven terrain (AMASS/CMU)<span>Walking over uneven terrain.</span></figcaption>
+        </figure>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="citation" id="citation" aria-labelledby="citation-heading">
+    <div class="section">
+      <div class="citation-heading"><h2 id="citation-heading">BibTeX</h2><button class="copy-button" type="button" hidden>Copy citation</button></div>
+      <pre><code id="bibtex">@misc{simos2026terra,
+  title  = {{TERRA}: Terrain-Aware Reconstruction, Retargeting
+            and Control for Musculoskeletal Locomotion},
+  author = {Simos, Merkourios and Li, Chengkun and
+            Ziliotto, Bianca and Mathis, Alexander},
+  year   = {2026},
+  url    = {https://merc-s.github.io/terra/}
+}</code></pre>
+      <p class="copy-status" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+</main>
+<footer>TERRA · <a href="https://github.com/merc-s/terra">Repository</a> · <a href="assets/fonts/LICENSE.txt">Charter typeface</a> · <a href="#top">Back to top ↑</a></footer>
+</body>
+</html>

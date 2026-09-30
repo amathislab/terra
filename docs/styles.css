@@ -40,6 +40,8 @@ h2{font-size:42px;line-height:1.2;font-weight:400;letter-spacing:-.025em;margin:
 .abstract{max-width:870px;padding-top:94px;padding-bottom:94px}
 .abstract p{margin:0 0 18px;text-align:left}
 .abstract p:last-child{margin-bottom:0}
+.explainer{max-width:1020px}
+.explainer video{border-radius:8px}
 figure{margin:0}
 .methodology img{display:block;width:100%;height:auto}
 .methodology a{display:block}

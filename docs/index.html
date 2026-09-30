@@ -41,6 +41,15 @@
     <p>Recent advances in musculoskeletal modeling and reinforcement learning have enabled muscle-actuated agents to reproduce increasingly complex human motions. Yet these capabilities remain largely confined to flat ground, in part because motion datasets rarely include aligned terrain geometry and because retargeting terrain interactions to complex musculoskeletal bodies is challenging.</p>
 <p>We present TERRA, an end-to-end pipeline for terrain-aware retargeting and control of musculoskeletal locomotion. From kinematic trajectories alone, TERRA combines terrain priors, estimated contacts, and negative free-space evidence to recover task-relevant support geometry. TERRA further considers anatomical, tendon-continuity, and contact constraints during retargeting. Using the resulting motion-terrain pairs from five datasets, we successfully train a single muscle-actuated control policy on the 9.4-hour training split of an 11.3-hour locomotion library. Across reconstruction, retargeting, and held-out tracking benchmarks, TERRA improves terrain accuracy, sharply reduces anatomical and interaction violations, and achieves the highest pooled completion rate over supported terrain families. Overall, TERRA provides a practical route from scene-less motion data to muscle-actuated locomotion over diverse non-flat terrain.</p>
   </section>
+  <section class="section explainer" id="overview-video" aria-labelledby="explainer-heading">
+    <h2 id="explainer-heading">TERRA in three minutes</h2>
+    <figure>
+      <video controls playsinline preload="none" poster="assets/images/terra-explainer.webp" aria-label="Three-minute TERRA explainer video">
+        <source src="assets/videos/terra-explainer.mp4" type="video/mp4">
+        <a href="assets/videos/terra-explainer.mp4">Watch the TERRA explainer video</a>
+      </video>
+    </figure>
+  </section>
   <section class="section methodology" id="methodology" aria-labelledby="methodology-heading">
     <h2 id="methodology-heading">Methodology</h2>
     <figure>

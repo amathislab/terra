@@ -20,6 +20,47 @@ from terra.terrain.metadata import TerrainMetadata
 from terra.training import main
 
 
+def test_smoke_update_keeps_production_policy_configuration():
+    from omegaconf import OmegaConf
+
+    settings_path = Path(__file__).resolve().parents[2] / "scripts/terra/ppo_smoke_overrides.json"
+    settings = json.loads(settings_path.read_text())
+    overrides = training.config_overrides(settings)
+    changed_paths = {override.split("=", 1)[0] for override in overrides}
+    assert changed_paths <= {
+        "experiment.env_params.num_envs",
+        "experiment.total_timesteps",
+        "experiment.total_timesteps_is_absolute",
+        "experiment.ppo_config.num_minibatches",
+        "experiment.distributed.num_devices",
+        "experiment.validation.active",
+        "experiment.save_checkpoints",
+        "experiment.checkpoint_interval",
+        "experiment.max_checkpoints_to_keep",
+        "experiment.async_checkpointing",
+        "experiment.auto_resume",
+        "experiment.online_logging_interval",
+        "wandb.mode",
+    }
+    production = training._compose_training_config()
+    smoke = training._compose_training_config(overrides)
+    for path in (
+        "experiment.env_params.goal_type",
+        "experiment.env_params.goal_params",
+        "experiment.env_params.use_egocentric_root_observations",
+        "experiment.env_params.enable_heightmap_observations",
+        "experiment.env_params.reward_params",
+        "experiment.actor_hidden_layers",
+        "experiment.critic_hidden_layers",
+        "experiment.ppo_config.init_std",
+        "experiment.ppo_config.num_steps",
+    ):
+        assert OmegaConf.select(smoke, path) == OmegaConf.select(production, path)
+    assert smoke.experiment.total_timesteps == (
+        smoke.experiment.num_envs * smoke.experiment.ppo_config.num_steps
+    )
+
+
 def test_training_output_markers_cover_hydra_and_durable_checkpoints(monkeypatch, tmp_path):
     from omegaconf import OmegaConf
 

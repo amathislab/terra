@@ -115,6 +115,7 @@ def test_repository_dataset_configs_share_one_schema(name):
     assert config.terrain_source_method is None
     assert config.method_overrides == {}
     assert config.contact_joints == DEFAULT_CONTACT_JOINTS
+    assert config.posed_seat_frame == "apparatus"
     assert not hasattr(config, "benchmark")
     assert not hasattr(config, "evaluation")
     assert not hasattr(config, "workers")

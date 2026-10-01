@@ -89,13 +89,12 @@ python scripts/terra/train_smoke.py \
   --output "$TERRA_ARTIFACT_ROOT/training/smoke"
 ```
 
-The smoke script uses eight environments, completes one PPO update, and requires a
-`checkpoint_1` under its output. The command is deliberately small; it does not
-establish a trained policy's task performance. For fewer than three motions, the smoke
-script disables adaptive sampling because its diagnostic selects the top three motions;
-larger selections keep the configured sampler. If preflight fails, resolve the device or
-package issue before trying PPO. `--allow-no-device` only checks software/configuration
-on a CPU machine.
+The smoke script uses the production goal, observations, network, rewards, and PPO
+initialization. It reduces the environment count to eight, disables validation, runs
+one PPO update, and requires a `checkpoint_1` under its output. This checks startup and
+one update; it does not establish task performance. If preflight fails, resolve the
+device or package issue before trying PPO. `--allow-no-device` only checks
+software/configuration on a CPU machine.
 
 ## Launch an experiment
 

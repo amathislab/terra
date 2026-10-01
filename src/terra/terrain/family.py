@@ -287,6 +287,7 @@ def classify_terrain_family(
     ramp: Mapping[str, object],
     *,
     neutral_foot_pitch: Mapping[str, float] | None = None,
+    neutral_foot_pitch_source: str = "provided_flat_reference",
     family_evidence_mode: str = FAMILY_EVIDENCE_PHYSICAL,
 ) -> dict[str, object]:
     """Select ``"ramp"`` or ``"steps"`` from explicit physical evidence."""
@@ -330,7 +331,7 @@ def classify_terrain_family(
             "swing_clearance_n": 0,
         }
 
-    neutral_source = "provided_flat_reference"
+    neutral_source = neutral_foot_pitch_source
     neutral = neutral_foot_pitch
     if neutral is None:
         # Do not silently impose one skeleton's rest chord on another dataset.  A caller

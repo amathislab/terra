@@ -136,7 +136,14 @@ class _SeatFrame:
     def from_rests(cls, rests: Sequence[SeatRest]) -> _SeatFrame:
         pelvis_xy = np.concatenate([rest.xy for rest in rests], axis=0)
         centre_xy = np.median(pelvis_xy, axis=0)
-        yaw = float(np.mean([rest.yaw for rest in rests]))
+        headings = np.asarray([rest.yaw for rest in rests], dtype=float)
+        mean_sine = float(np.mean(np.sin(headings)))
+        mean_cosine = float(np.mean(np.cos(headings)))
+        yaw = (
+            float(np.arctan2(mean_sine, mean_cosine))
+            if np.hypot(mean_sine, mean_cosine) > 1e-8
+            else float(headings[0])
+        )
         return cls(
             pelvis_xy=pelvis_xy,
             centre_xy=centre_xy,

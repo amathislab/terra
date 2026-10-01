@@ -59,6 +59,8 @@ class TerraReconstructionProfile:
             ),
             use_free_space_evidence=self.use_free_space_evidence,
         )
+        if not self.use_neutral_foot_pitch:
+            options.pop("neutral_foot_pitch_source", None)
         if not self.use_posed_seat_surface:
             # A config-side seat surface must not silently leak into a reduced profile.
             options.pop("seat_support_heights", None)

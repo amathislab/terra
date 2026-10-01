@@ -21,6 +21,7 @@ from terra.baselines.omniretarget import SMPLH_DEMO_JOINTS
 from terra.source import posed_seat_support_heights
 from terra.terrain import (
     DEFAULT_CONTACT_JOINTS,
+    SMPLH_NEUTRAL_FOOT_PITCH_DEG,
     TerraReconstructionProfile,
     detect_seat_rests,
 )
@@ -78,6 +79,18 @@ class TerrainFitResult:
     validation: dict[str, Any]
     effective_fit_options: dict[str, Any]
     calibration: CalibrationEvidence
+
+
+def smplh_terrain_fit_options(
+    options: Mapping[str, Any], *, use_fitted_shape: bool, calibrate_sites: bool
+) -> dict[str, Any]:
+    """Use the fitted SMPL-H rest pitch when no flat reference was supplied."""
+
+    resolved = dict(options)
+    if use_fitted_shape and calibrate_sites and "neutral_foot_pitch" not in resolved:
+        resolved["neutral_foot_pitch"] = dict(SMPLH_NEUTRAL_FOOT_PITCH_DEG)
+        resolved["neutral_foot_pitch_source"] = "smplh_model_rest"
+    return resolved
 
 
 def add_posed_seat_support(
@@ -268,4 +281,5 @@ __all__ = [
     "add_posed_seat_support",
     "implicit_calibration_evidence",
     "reconstruct_terrain",
+    "smplh_terrain_fit_options",
 ]

@@ -20,12 +20,6 @@ def main():
     from terra.training import config_overrides
 
     settings = json.loads((Path(__file__).with_name("ppo_smoke_overrides.json")).read_text())
-    materialization = json.loads(args.materialization_record.read_text())
-    if len(materialization["motions"]) < 3:
-        # The upstream adaptive-sampling diagnostics request the top three
-        # motions, which a one-motion quickstart cannot provide.
-        settings["experiment"]["adaptive_sampling"]["enabled"] = False
-        print("Smoke selection has fewer than three motions; disabling adaptive sampling.", flush=True)
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
     command = [

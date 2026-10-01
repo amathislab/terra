@@ -42,6 +42,21 @@ FPS = 100.0
 JOINT_OFFSET = {"L_Toe": 0.02, "R_Toe": 0.02, "L_Ankle": 0.09, "R_Ankle": 0.09}
 
 
+def test_seat_orientation_wraps_across_pi():
+    from terra.terrain.seats import SeatRest, _SeatFrame
+
+    rests = [
+        SeatRest(0, 10, 0.45, np.zeros((10, 2)), yaw=np.deg2rad(179.0)),
+        SeatRest(10, 20, 0.45, np.zeros((10, 2)), yaw=np.deg2rad(-179.0)),
+    ]
+    frame = _SeatFrame.from_rests(rests)
+
+    assert np.cos(frame.yaw) == pytest.approx(-1.0)
+    assert np.sin(frame.yaw) == pytest.approx(0.0, abs=1e-12)
+    longitudinal, _ = frame.project(np.array([[-1.0, 0.0]]))
+    assert longitudinal[0] == pytest.approx(1.0)
+
+
 def synth_walk(beam_height=0.10, beam_x=(-0.9, 0.9), n_beam_steps=4, stance_frames=60, swing_frames=40):
     """A walk along +x that steps up onto a beam, crosses it, and steps down.
 

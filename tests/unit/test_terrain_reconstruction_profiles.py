@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
+from terra.terrain.family import SMPLH_NEUTRAL_FOOT_PITCH_DEG
 from terra.terrain.reconstruction_profiles import (
     TERRA_FULL_PROFILE,
     TERRA_NO_PHYSICAL_CUES_PROFILE,
@@ -77,6 +79,13 @@ def test_no_physical_cues_changes_only_ramp_step_selection_evidence():
 
     assert ablated["calibrated_joint_offsets"] == full["calibrated_joint_offsets"]
     assert ablated["neutral_foot_pitch"] is None
+    assert "neutral_foot_pitch_source" not in resolve_terra_reconstruction_profile(
+        "no-physical-cues"
+    ).fit_options(
+        {"neutral_foot_pitch_source": "smplh_model_rest"},
+        neutral_foot_pitch=NEUTRAL,
+        calibrated_joint_offsets=OFFSETS,
+    )
     assert "contact_intervals_s" not in ablated
     assert ablated["use_free_space_evidence"] is True
     assert "exclude_claimed" not in ablated
@@ -284,16 +293,88 @@ def test_explicit_full_matches_implicit_production_options_but_adds_profile_meta
     assert explicit["input"]["joint_order"]
 
 
+def test_uncalibrated_smplh_dataset_uses_model_rest_pitch(monkeypatch, tmp_path):
+    dataset_pipeline, config, record, calls = _mock_dataset_fit(monkeypatch, tmp_path)
+    record.calibration_path = None
+
+    dataset_pipeline.fit_record_terrain(config, record)
+
+    assert calls[0]["neutral_foot_pitch"] == SMPLH_NEUTRAL_FOOT_PITCH_DEG
+    assert calls[0]["neutral_foot_pitch_source"] == "smplh_model_rest"
+
+
+def test_auto_terrain_uses_model_rest_pitch_for_calibrated_smplh(monkeypatch):
+    from terra import pipeline
+    from terra._musclemimic import TerrainSpec
+
+    requests = []
+    monkeypatch.setattr(pipeline, "_add_posed_seat_support", lambda options, *_args, **_kwargs: options)
+
+    def reconstruct(request):
+        requests.append(request)
+        return SimpleNamespace(
+            terrain=TerrainSpec(),
+            report={"warnings": [], "n_stance_events": 0},
+            validation={"raised_contact_error_max": 0.0, "max_penetration": 0.0},
+        )
+
+    monkeypatch.setattr(pipeline, "reconstruct_terrain", reconstruct)
+    config = SimpleNamespace(terrain="auto", terrain_fit={}, use_fitted_shape=True, calibrate_sites=True)
+    pipeline._resolve_terrain(
+        "auto", np.zeros((2, len(pipeline.SMPLH_DEMO_JOINTS), 3)), 100.0,
+        config, logging.getLogger(__name__), motion_data={}, smpl_model_path="smpl",
+        fitted_shape_path="shape.pkl", normalization={"source_to_normalized_translation_m": [0.0, 0.0, 0.0]},
+    )
+
+    assert requests[0].fit_options["neutral_foot_pitch"] == SMPLH_NEUTRAL_FOOT_PITCH_DEG
+    assert requests[0].fit_options["neutral_foot_pitch_source"] == "smplh_model_rest"
+
+
+def test_one_motion_terrain_helper_uses_model_rest_pitch(monkeypatch):
+    from terra import pipeline
+    from terra._musclemimic import TerrainSpec
+
+    requests = []
+    monkeypatch.setattr(pipeline, "resolve_model_path", lambda path: path)
+    monkeypatch.setattr(pipeline, "motion_world_joints", lambda *_args, **_kwargs: (
+        np.zeros((2, len(pipeline.SMPLH_DEMO_JOINTS), 3)),
+        100.0,
+        {"source_to_normalized_translation_m": [0.0, 0.0, 0.0]},
+    ))
+    monkeypatch.setattr(pipeline, "_add_posed_seat_support", lambda options, *_args, **_kwargs: options)
+
+    def reconstruct(request):
+        requests.append(request)
+        return SimpleNamespace(terrain=TerrainSpec(), report={}, validation={})
+
+    monkeypatch.setattr(pipeline, "reconstruct_terrain", reconstruct)
+    pipeline.terrain_for_motion(
+        "Study/Trial", motion_data={}, smpl_model_path="smpl", fitted_shape_path="shape.pkl"
+    )
+
+    assert requests[0].fit_options["neutral_foot_pitch"] == SMPLH_NEUTRAL_FOOT_PITCH_DEG
+    assert requests[0].fit_options["neutral_foot_pitch_source"] == "smplh_model_rest"
+
+
+def test_subject_shaped_auto_terrain_does_not_use_robot_pitch():
+    from terra.reconstruction import smplh_terrain_fit_options
+
+    assert smplh_terrain_fit_options({}, use_fitted_shape=False, calibrate_sites=False) == {}
+    assert smplh_terrain_fit_options(
+        {"neutral_foot_pitch": None}, use_fitted_shape=True, calibrate_sites=True
+    ) == {"neutral_foot_pitch": None}
+
+
 @pytest.mark.parametrize(
     "profile, frame, height",
     [
         (None, None, 0.42),
         (None, "apparatus", 0.42),
         (None, "normalized", 0.45),
-        ("full", None, 0.45),
+        ("full", None, 0.42),
         ("full", "normalized", 0.45),
         ("full", "apparatus", 0.42),
-        ("no-physical-cues", None, 0.45),
+        ("no-physical-cues", None, 0.42),
         ("no-physical-cues", "apparatus", 0.42),
     ],
 )

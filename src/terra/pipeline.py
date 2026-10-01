@@ -69,6 +69,7 @@ from terra.reconstruction import (
     add_posed_seat_support,
     implicit_calibration_evidence,
     reconstruct_terrain,
+    smplh_terrain_fit_options,
 )
 from terra.retargeter import TerraRetargeter
 from terra.robot import build_task_constants, swap_model_and_fix_limits
@@ -161,6 +162,9 @@ def terrain_for_motion(
     )
     names = list(SMPLH_DEMO_JOINTS)
     calibrated = use_fitted_shape if calibrate_sites is None else bool(calibrate_sites)
+    fit_kwargs = smplh_terrain_fit_options(
+        fit_kwargs, use_fitted_shape=use_fitted_shape, calibrate_sites=calibrated
+    )
     fit_kwargs = _add_posed_seat_support(
         fit_kwargs,
         joints,
@@ -236,15 +240,18 @@ def _resolve_terrain(
         logger.info(f"Terrain: loading {terrain}")
         return TerrainSpec.load(terrain)
 
+    calibrated = config.use_fitted_shape if config.calibrate_sites is None else config.calibrate_sites
     fit_cfg = _add_posed_seat_support(
-        dict(config.terrain_fit),
+        smplh_terrain_fit_options(
+            config.terrain_fit, use_fitted_shape=config.use_fitted_shape, calibrate_sites=calibrated
+        ),
         human_joints,
         fps,
         motion_data,
         smpl_model_path,
         fitted_shape_path,
         use_fitted_shape=config.use_fitted_shape,
-        calibrate_sites=(config.use_fitted_shape if config.calibrate_sites is None else config.calibrate_sites),
+        calibrate_sites=calibrated,
         ground_datum_correction_m=-float(normalization["source_to_normalized_translation_m"][2]),
         logger=logger,
     )

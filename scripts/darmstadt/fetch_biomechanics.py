@@ -59,6 +59,30 @@ def _range(url: str, start: int, end: int) -> bytes:
     return b"".join(chunks)
 
 
+def _zip64_values(extra: bytes, size: int, compressed_size: int, local_offset: int) -> tuple[int, int, int]:
+    """Read values replaced by ZIP64 sentinels in a central-directory entry."""
+    if 0xFFFFFFFF not in (size, compressed_size, local_offset):
+        return size, compressed_size, local_offset
+    position = 0
+    while position + 4 <= len(extra):
+        kind, length = struct.unpack_from("<HH", extra, position)
+        position += 4
+        end = position + length
+        if end > len(extra):
+            raise RuntimeError("Malformed ZIP extra field")
+        if kind == 0x0001:
+            values = [size, compressed_size, local_offset]
+            for index, value in enumerate(values):
+                if value == 0xFFFFFFFF:
+                    if position + 8 > end:
+                        raise RuntimeError("ZIP64 extra field is missing a required size or offset")
+                    values[index] = struct.unpack_from("<Q", extra, position)[0]
+                    position += 8
+            return values[0], values[1], values[2]
+        position = end
+    raise RuntimeError("ZIP64 extra field is missing for a saturated size or offset")
+
+
 def _central_entries(tail: bytes) -> list[ZipEntry]:
     entries = []
     position = 0
@@ -91,6 +115,8 @@ def _central_entries(tail: bytes) -> list[ZipEntry]:
         name_start = position + 46
         name = tail[name_start : name_start + filename_length].decode("utf-8")
         if name.startswith(("Preprocessed/EMG/EMG", "Preprocessed/Forces/Forces")) and name.endswith(".mat"):
+            extra = tail[name_start + filename_length : name_start + filename_length + extra_length]
+            size, compressed_size, local_offset = _zip64_values(extra, size, compressed_size, local_offset)
             entries.append(
                 ZipEntry(name, method, crc32, compressed_size, size, local_offset)
             )

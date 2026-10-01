@@ -370,6 +370,7 @@ def _classify_short_ramp(
     ramp_report: dict,
     width_prior: float,
     neutral_foot_pitch: Mapping[str, float] | None,
+    neutral_foot_pitch_source: str,
     family_evidence_mode: str,
 ) -> tuple[TerrainSpec | None, dict, dict | None]:
     """Use extra orientation probes to classify a three-contact annotated clip."""
@@ -392,6 +393,7 @@ def _classify_short_ramp(
         evidence.family_events,
         family_ramp_report,
         neutral_foot_pitch=neutral_foot_pitch,
+        neutral_foot_pitch_source=neutral_foot_pitch_source,
         family_evidence_mode=family_evidence_mode,
     )
     if family["family"] == "ramp":
@@ -486,6 +488,7 @@ def _fit_ramp_candidate(
     evidence: _FitEvidence,
     width_prior: float,
     neutral_foot_pitch: Mapping[str, float] | None,
+    neutral_foot_pitch_source: str,
     family_evidence_mode: str,
     report: dict,
 ) -> TerrainSpec | None:
@@ -497,6 +500,7 @@ def _fit_ramp_candidate(
         ramp_report,
         width_prior,
         neutral_foot_pitch,
+        neutral_foot_pitch_source,
         family_evidence_mode,
     )
     if ramp_report.get("slope_deg") is not None:
@@ -510,6 +514,7 @@ def _fit_ramp_candidate(
                 evidence.family_events,
                 ramp_report,
                 neutral_foot_pitch=neutral_foot_pitch,
+                neutral_foot_pitch_source=neutral_foot_pitch_source,
                 family_evidence_mode=family_evidence_mode,
             )
         )
@@ -974,6 +979,7 @@ def fit_terrain_from_motion(
     ramp: str = "auto",
     ramp_width_prior: float = RAMP_WIDTH_PRIOR,
     neutral_foot_pitch: Mapping[str, float] | None = None,
+    neutral_foot_pitch_source: str = "provided_flat_reference",
     family_evidence_mode: str = FAMILY_EVIDENCE_PHYSICAL,
     seat: str = "auto",
     pelvis_seat_offset: float = PELVIS_SEAT_OFFSET,
@@ -1012,6 +1018,7 @@ def fit_terrain_from_motion(
             automatically flat reference motion.  This is skeleton/marker calibration,
             not a terrain-family label.  If omitted, selection conservatively falls back
             to the direct footfall-profile residual.
+        neutral_foot_pitch_source: Label recorded with the pitch in the fit report.
         family_evidence_mode: ``"physical"`` uses supported-foot normals and swing
             clearance to select ramp versus steps. ``"height_only"`` is the paper
             ablation and uses only the frozen contact-height residual rule.
@@ -1085,6 +1092,7 @@ def fit_terrain_from_motion(
             evidence,
             ramp_width_prior,
             neutral_foot_pitch,
+            neutral_foot_pitch_source,
             family_evidence_mode,
             report,
         )

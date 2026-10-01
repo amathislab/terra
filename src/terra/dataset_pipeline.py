@@ -39,6 +39,7 @@ from terra.reconstruction import (
     ValidationPolicy,
     add_posed_seat_support,
     reconstruct_terrain,
+    smplh_terrain_fit_options,
 )
 from terra.runtime import (
     ensure_environment_registered,
@@ -239,9 +240,8 @@ def load_dataset_config(
         raise ValueError("[terrain].contact_source must be 'kinematic'")
     if terrain_mode not in TERRAIN_MODES:
         raise ValueError(f"[terrain].mode must be one of {sorted(TERRAIN_MODES)}")
-    raw_seat_frame = terrain.get("posed_seat_frame")
-    posed_seat_frame = str(raw_seat_frame).casefold() if raw_seat_frame is not None else None
-    if posed_seat_frame not in {None, "normalized", "apparatus"}:
+    posed_seat_frame = str(terrain.get("posed_seat_frame", "apparatus")).casefold()
+    if posed_seat_frame not in {"normalized", "apparatus"}:
         raise ValueError("[terrain].posed_seat_frame must be 'normalized' or 'apparatus'")
     terrain_source_dir = roots.resolve_input(terrain.get("source_dir"), environment=environment)
     raw_source_method = terrain.get("source_method")
@@ -588,11 +588,14 @@ def fit_record_terrain(
 
     fit_options = dict(config.terrain_fit)
     fit_options.update(dict(fit_options_override or {}))
-    # Respect explicit coordinate frames; dataset retargeting and reconstruction
-    # benchmarks have different defaults when no frame is specified.
-    seat_frame = getattr(config, "posed_seat_frame", None)
-    if seat_frame is None:
-        seat_frame = "normalized" if reconstruction_profile is not None else "apparatus"
+    if neutral is None:
+        fit_options = smplh_terrain_fit_options(
+            fit_options, use_fitted_shape=True, calibrate_sites=config.calibrate_sites
+        )
+        neutral = fit_options.get("neutral_foot_pitch")
+    else:
+        fit_options["neutral_foot_pitch_source"] = "provided_flat_reference"
+    seat_frame = getattr(config, "posed_seat_frame", None) or "apparatus"
     ground_correction = (
         0.0 if seat_frame == "normalized" else -float(normalization["source_to_normalized_translation_m"][2])
     )

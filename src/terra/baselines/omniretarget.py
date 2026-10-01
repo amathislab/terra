@@ -1,4 +1,4 @@
-"""Load OmniRetarget and define TERRA's contribution-free baseline adapter."""
+"""Load OmniRetarget and define TERRA's comparison adapter."""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ def demo_joint_permutation() -> list[int]:
 
 
 def fit_motion(env_name, robot_conf, motion_data, logger, config: Mapping[str, object] | None = None):
-    """Run the contribution-free OmniRetarget profile through TERRA's adapter."""
+    """Run OmniRetarget with TERRA's comparison settings."""
     from terra.pipeline import fit_terra_motion
     from terra.profiles import resolve_method_profile
 

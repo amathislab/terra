@@ -1,4 +1,4 @@
-"""Authoritative scientific metric registry.
+"""Metric definitions for retargeting evaluation.
 
 Every output column names its formula lineage and denominator here. A duplicate key with a
 different definition is a scientific conflict, not an alias: callers must select or add an
@@ -16,7 +16,7 @@ class MetricDefinitionConflict(ValueError):  # noqa: N818 - scientific conflict,
 
 @dataclass(frozen=True)
 class MetricSpec:
-    """One authoritative scalar emitted for each method-motion pair."""
+    """One scalar emitted for each method-motion pair."""
 
     key: str
     label: str

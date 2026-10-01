@@ -1,4 +1,4 @@
-"""Configuration and hardware-contract tests for TERRA FlashSAC training."""
+"""Configuration and hardware checks for TERRA PPO training."""
 
 from __future__ import annotations
 

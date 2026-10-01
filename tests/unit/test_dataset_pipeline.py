@@ -36,9 +36,9 @@ REPO = Path(__file__).resolve().parents[2]
 
 def test_benchmark_timing_context_records_worker_and_thread_allocation(monkeypatch):
     for name, value in {
-        "TERRA_RUNAI_CPU_REQUEST": "16",
+        "TERRA_CPU_REQUEST": "16",
         "TERRA_RUN_WORKERS": "8",
-        "TERRA_RUNAI_THREADS_PER_WORKER": "1",
+        "TERRA_THREADS_PER_WORKER": "1",
         "OMP_NUM_THREADS": "1",
         "MKL_NUM_THREADS": "1",
         "OPENBLAS_NUM_THREADS": "1",

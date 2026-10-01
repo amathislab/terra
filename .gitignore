@@ -28,9 +28,5 @@ checkpoints/
 /wandb/
 /artifacts/
 /videos/
-/manuscript/figures/*.frames/
 /.worktrees/
-/rcp/
 /*.bundle
-
-/terra-paper-inputs/

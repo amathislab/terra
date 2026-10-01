@@ -32,7 +32,7 @@ def fit_motion(
     skip_steps: bool | None = None,
     visualize: bool | None = None,
 ):
-    """Run the contribution-free MuscleMimic SMPL optimization baseline."""
+    """Run the MuscleMimic SMPL optimization baseline."""
     supplied = dict(config or {})
     if skip_steps is not None:
         supplied["skip_steps"] = skip_steps

@@ -18,7 +18,7 @@ def _export_group(module: str, *names: str) -> dict[str, tuple[str, str]]:
     return {name: (module, name) for name in names}
 
 
-_STABLE_EXPORTS = {
+_EXPORTS = {
     **_export_group("terra._methods", "SUPPORTED_METHODS", "RetargetingMethod"),
     **_export_group(
         "terra.paths",
@@ -56,8 +56,6 @@ _STABLE_EXPORTS = {
     **_export_group("terra.terrain.metadata", "TerrainMetadata"),
 }
 
-_LAZY_EXPORTS = _STABLE_EXPORTS
-
 if TYPE_CHECKING:
     from terra._methods import SUPPORTED_METHODS, RetargetingMethod
     from terra.api import TerrainInput, retarget, retarget_c3d, retarget_mat, retarget_smplh, retarget_trc
@@ -82,12 +80,12 @@ try:
 except PackageNotFoundError:  # Source trees without installed package metadata.
     __version__ = "1.0.0"
 
-__all__ = ["__version__", *_STABLE_EXPORTS]
+__all__ = ["__version__", *_EXPORTS]
 
 
 def __getattr__(name: str) -> Any:
     try:
-        module_name, attribute_name = _LAZY_EXPORTS[name]
+        module_name, attribute_name = _EXPORTS[name]
     except KeyError as exc:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from exc
     value = getattr(import_module(module_name), attribute_name)

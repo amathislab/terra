@@ -1,15 +1,4 @@
-"""Tests for TERRA's terrain-aware extensions to the OmniRetarget QP.
-
-Every optional cost is linearized into one shared least-squares representation used by
-the legacy CVXPY, condensed CVXPY, and native Clarabel backends.
-
-These guard silent failures. A wrong frame or sign in the orientation Jacobian or the
-coupler linearisation does not raise: the QP still solves, the cost still decreases, and
-the retargeted motion is merely worse in a way only a full solve plus a diagnostic sweep
-would reveal. Same for the contact ramp - a ramp that fails to reach zero at the edges
-reintroduces exactly the engagement step it exists to remove, and nothing downstream would
-complain.
-"""
+"""Retargeting objectives, constraints, Jacobians, and QP backends."""
 
 from types import SimpleNamespace
 
@@ -1238,7 +1227,7 @@ def test_clearance_shortfall_is_capped_per_iteration(probed_model):
     Mid-swing over a beam or box top, non-penetration can be inactive (nothing close
     enough to trigger it yet), so an uncapped clearance shortfall is the only force acting
     and gets undone in one unopposed linearised step - traced to a 56.9 mm single-iteration
-    pelvis jump on BEAM01 (`omniretarget-tendon-jump-is-pelvis-pop` memory). The cap plays
+    pelvis jump on a beam crossing. The cap plays
     the same role `attach_environment_geoms`'s `max_recovery_per_iter` already plays for
     non-penetration: spread a large correction over more iterations instead of one.
     """
@@ -1321,7 +1310,7 @@ def test_smooth_surface_uses_the_same_duration_at_common_source_rates():
     """Zero must be exact; 50 ms must represent the same temporal edge at each FPS.
 
     `TerrainSpec.height_near` is a hard step at a box's reach-grown footprint edge: traced
-    on BEAM01 (`omniretarget-tendon-jump-is-pelvis-pop` memory) to a swing-clearance
+    on a beam crossing to a swing-clearance
     requirement jumping 300+ mm in one frame with no counterpart in the source motion,
     which itself descends smoothly through the same frame. Smoothing spreads the same total
     step over more frames instead of asking the solver to absorb it in one.

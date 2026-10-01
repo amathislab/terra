@@ -1,4 +1,4 @@
-"""Fail-closed diagnostics for discontinuous retargeted trajectories."""
+"""Detect discontinuities in retargeted trajectories and retry when needed."""
 
 from __future__ import annotations
 

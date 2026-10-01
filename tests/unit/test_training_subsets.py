@@ -14,6 +14,7 @@ from terra.commands.selection import (
     build_selection,
     publish_selection,
 )
+from terra.commands.selection import main as select_main
 from terra.paths import StorageRoots
 
 
@@ -351,6 +352,36 @@ def test_training_selection_accepts_only_flat_artifacts_in_flat_mode(monkeypatch
 
     assert [row["motion"] for row in rows] == [motion]
     assert rows[0]["terrain_relpath"] == ""
+
+
+def test_training_selection_cli_accepts_one_validated_retargeted_motion(monkeypatch, tmp_path):
+    cache = tmp_path / "cache"
+    motion = "FirstRun/motion"
+    base = cache / "MyoFullBody/terra" / motion
+
+    def validated(root, selected_motion, **kwargs):
+        assert root == cache
+        assert selected_motion == motion
+        assert kwargs["require_nonflat_terrain"] is False
+        return SimpleNamespace(
+            trajectory_path=base.with_suffix(".npz"),
+            analysis_path=base.with_name(f"{base.name}_analysis.npz"),
+            terrain_path=None,
+            nonflat_terrain=False,
+        )
+
+    monkeypatch.setattr("terra.commands.selection.validate_retarget_artifacts", validated)
+    selection = tmp_path / "selection.csv"
+    assert select_main([
+        "--cache-root", str(cache), "--motion", motion, "--dataset", "first-run",
+        "--terrain-mode", "mixed", "--out", str(selection),
+    ]) == 0
+    with selection.open(newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert len(rows) == 1
+    assert rows[0]["source_cache_root"] == str(cache)
+    assert rows[0]["trajectory_relpath"] == "MyoFullBody/terra/FirstRun/motion.npz"
+    assert rows[0]["split"] == "train"
 
 
 def test_training_selection_can_preserve_first_artifact_for_cross_run_duplicates(monkeypatch, tmp_path):

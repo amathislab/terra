@@ -273,7 +273,7 @@ experiment:
     vf_coef: 0.5
 
   distributed:
-    # All visible devices for direct launches; RunAI pins this to --gpu N.
+    # Use all devices made visible to the training process.
     num_devices: -1
   trajectory:
     # Replicate the motion library for the first rollout. Static sharding is a

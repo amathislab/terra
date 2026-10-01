@@ -217,7 +217,7 @@ def _worker(job: tuple) -> tuple[dict, dict]:
 
 def _definitions_markdown() -> str:
     lines = [
-        "# Authoritative metric registry",
+        "# Metric definitions",
         "",
         "| Key | Family | Formula | Denominator | Source |",
         "|---|---|---|---|---|",
@@ -452,7 +452,7 @@ def _command_help() -> str:
     return """usage: terra evaluate COMMAND [ARGS ...]
 
 Evaluation commands:
-  metrics ...          score explicit method-motion cohorts with authoritative metrics
+  metrics ...          score explicit method-motion cohorts with defined metrics
   dataset ...          run retargeting metrics using one packaged dataset configuration
 
 

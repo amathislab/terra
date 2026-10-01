@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from terra._files import atomic_write
+from terra._files import atomic_write, file_sha256
 from terra._revision import git_commit
 
 RUN_PROVENANCE_SCHEMA = "terra.reconstruction-provenance.v1"
@@ -22,6 +22,23 @@ EVALUATION_PROVENANCE_SCHEMA = "terra.reconstruction-evaluation-provenance.v1"
 RECORD_PROVENANCE_SCHEMA = "terra.reconstruction-record-provenance.v1"
 
 _SOURCE_SUFFIXES = frozenset({".csv", ".json", ".py", ".toml"})
+_RECONSTRUCTION_SOURCES = (
+    "benchmarking/reconstruction",
+    "terrain",
+    "datasets",
+    "baselines",
+    "reconstruction.py",
+    "dataset_pipeline.py",
+    "runtime.py",
+    "_musclemimic.py",
+    "artifacts.py",
+    "source.py",
+    "smplh.py",
+    "contacts.py",
+    "profiles.py",
+    "constants.py",
+    "paths.py",
+)
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 _GIT_COMMIT = re.compile(r"[0-9a-f]{40}")
 
@@ -53,24 +70,24 @@ def content_sha256(value: object) -> str:
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
 
 
-def file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
+def _reconstruction_source_files(package_root: Path) -> list[Path]:
+    """List packaged code and resources that can affect reconstruction fits."""
+    files = []
+    for name in _RECONSTRUCTION_SOURCES:
+        source = package_root / name
+        files.extend(source.rglob("*") if source.is_dir() else [source])
+    return sorted(
+        path
+        for path in files
+        if path.is_file() and path.suffix.casefold() in _SOURCE_SUFFIXES and "__pycache__" not in path.parts
+    )
 
 
 def _source_tree_sha256(package_root: Path) -> str:
-    """Hash package-owned executable code and bundled benchmark resources."""
+    """Hash only code and bundled resources used by reconstruction."""
 
     digest = hashlib.sha256()
-    files = sorted(
-        path
-        for path in package_root.rglob("*")
-        if path.is_file() and path.suffix.casefold() in _SOURCE_SUFFIXES and "__pycache__" not in path.parts
-    )
-    for path in files:
+    for path in _reconstruction_source_files(package_root):
         relative = path.relative_to(package_root).as_posix().encode("utf-8")
         digest.update(len(relative).to_bytes(8, "big"))
         digest.update(relative)
@@ -94,7 +111,7 @@ def _source_state(repo_root: Path | None, package_root: Path) -> str:
                 "--porcelain",
                 "--untracked-files=all",
                 "--",
-                str(package_root),
+                *(str(package_root / name) for name in _RECONSTRUCTION_SOURCES),
             ],
             check=True,
             capture_output=True,
@@ -103,6 +120,26 @@ def _source_state(repo_root: Path | None, package_root: Path) -> str:
     except (OSError, subprocess.CalledProcessError):
         return "packaged"
     return "dirty" if completed.stdout.strip() else "clean"
+
+
+def _source_commit(repo_root: Path | None, package_root: Path) -> str:
+    """Use the last revision that changed reconstruction source for cache identity."""
+    candidate = repo_root.expanduser().resolve() if repo_root is not None else package_root.parents[1]
+    if not (candidate / ".git").exists():
+        return git_commit(repo_root)
+    try:
+        completed = subprocess.run(
+            [
+                "git", "-C", str(candidate), "log", "-1", "--format=%H", "--",
+                *(str(package_root / name) for name in _RECONSTRUCTION_SOURCES),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return git_commit(repo_root)
+    return completed.stdout.strip() or git_commit(repo_root)
 
 
 def _input_file(path: Path | None) -> dict[str, str] | None:
@@ -127,7 +164,7 @@ def build_run_provenance(
 
     package_root = Path(__file__).resolve().parents[2]
     source = {
-        "git_commit": git_commit(repo_root),
+        "git_commit": _source_commit(repo_root, package_root),
         "state": _source_state(repo_root, package_root),
         "tree_sha256": _source_tree_sha256(package_root),
     }

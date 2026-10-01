@@ -1,9 +1,8 @@
-"""Typed production service for TERRA terrain reconstruction.
+"""Reconstruct and validate terrain from motion landmarks.
 
-Callers prepare motion landmarks and any dataset-specific calibration evidence,
-then submit one :class:`ReconstructionRequest`.  The service is the sole production
-owner of profile resolution, terrain fitting, internal validation, and their shared
-report structure.
+Callers pass landmarks and any dataset calibration in a
+:class:`ReconstructionRequest`. The result contains the fitted terrain and
+validation report.
 """
 
 from __future__ import annotations

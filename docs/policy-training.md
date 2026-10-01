@@ -17,39 +17,18 @@ lookahead frames. This startup exercise does not establish a useful general poli
 
 First complete the
 [one-motion retarget walkthrough](motion-retargeting.md#run-one-motion) and its
-validation. Create the manifest required by `terra train materialize` from the validated
-output:
+validation. Select that published motion by its `--name` identifier. The selector
+validates the trajectory and sidecars before writing the manifest:
 
 ```bash
 export TERRA_ARTIFACT_ROOT="$HOME/terra-results"
-python - <<'PY'
-import csv, os
-from pathlib import Path
-from terra import validate_retarget_artifacts
-
-source = Path(os.environ["TERRA_ARTIFACT_ROOT"]) / "quickstart"
-item = validate_retarget_artifacts(source, "FirstRun/motion")
-destination = Path(os.environ["TERRA_ARTIFACT_ROOT"]) / "training"
-destination.mkdir(parents=True, exist_ok=True)
-fields = [
-    "motion", "dataset", "split", "source_cache_root",
-    "trajectory_relpath", "analysis_relpath", "terrain_relpath",
-]
-row = {
-    "motion": item.motion_name,
-    "dataset": "first-run",
-    "split": "train",
-    "source_cache_root": str(source),
-    "trajectory_relpath": str(item.trajectory_path.relative_to(source)),
-    "analysis_relpath": str(item.analysis_path.relative_to(source)),
-    "terrain_relpath": "" if item.terrain_path is None else str(item.terrain_path.relative_to(source)),
-}
-with (destination / "selection.csv").open("w", newline="") as handle:
-    writer = csv.DictWriter(handle, fieldnames=fields)
-    writer.writeheader()
-    writer.writerow(row)
-print(destination / "selection.csv")
-PY
+mkdir -p "$TERRA_ARTIFACT_ROOT/training"
+terra train select \
+  --cache-root "$TERRA_ARTIFACT_ROOT/quickstart" \
+  --motion FirstRun/motion \
+  --dataset first-run \
+  --terrain-mode mixed \
+  --out "$TERRA_ARTIFACT_ROOT/training/selection.csv"
 terra train segment \
   --selection-manifest "$TERRA_ARTIFACT_ROOT/training/selection.csv" \
   --out "$TERRA_ARTIFACT_ROOT/training/segmented.csv" \

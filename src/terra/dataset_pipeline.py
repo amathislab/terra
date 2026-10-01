@@ -86,9 +86,9 @@ def benchmark_timing_context() -> dict[str, object]:
     visible_cpus = os.cpu_count() or 1
     return {
         "cpu_model": cpu_model,
-        "cpu_request": positive_integer("TERRA_RUNAI_CPU_REQUEST", visible_cpus),
+        "cpu_request": positive_integer("TERRA_CPU_REQUEST", visible_cpus),
         "worker_processes": positive_integer("TERRA_RUN_WORKERS", 1),
-        "threads_per_worker": positive_integer("TERRA_RUNAI_THREADS_PER_WORKER", 1),
+        "threads_per_worker": positive_integer("TERRA_THREADS_PER_WORKER", 1),
         "omp_num_threads": positive_integer("OMP_NUM_THREADS", 1),
         "mkl_num_threads": positive_integer("MKL_NUM_THREADS", 1),
         "openblas_num_threads": positive_integer("OPENBLAS_NUM_THREADS", 1),

@@ -6,12 +6,6 @@ import argparse
 import importlib
 import sys
 from collections.abc import Sequence
-from typing import Protocol, cast
-
-
-class _Command(Protocol):
-    def __call__(self, argv: Sequence[str] | None = None) -> int: ...
-
 
 _COMMANDS = {
     "convert": (
@@ -23,7 +17,7 @@ _COMMANDS = {
     "evaluate": (
         "terra.evaluation.cli",
         "main",
-        "evaluate explicit method-motion cohorts with the authoritative metrics",
+        "evaluate explicit method-motion cohorts with the defined metrics",
     ),
     "reconstruct": (
         "terra.benchmarking.reconstruction.cli",
@@ -52,7 +46,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _invoke(module_name: str, function_name: str, argv: Sequence[str]) -> int:
-    function = cast(_Command, getattr(importlib.import_module(module_name), function_name))
+    function = getattr(importlib.import_module(module_name), function_name)
     return int(function(argv))
 
 

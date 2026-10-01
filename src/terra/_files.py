@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import tempfile
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
+
+
+def file_sha256(path: Path) -> str:
+    """Hash a file without loading it into memory."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 @contextmanager
@@ -86,4 +96,4 @@ def atomic_write(path: Path, writer: Callable[[Path], object]) -> None:
         commit_staged_files(((path, temporary_path),))
 
 
-__all__ = ["atomic_write", "commit_staged_files", "staged_write"]
+__all__ = ["atomic_write", "commit_staged_files", "file_sha256", "staged_write"]

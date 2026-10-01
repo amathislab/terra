@@ -6,6 +6,10 @@ candidate terrain against motion landmarks and free space. The fit produces a te
 specification **and** a validation report. A flat motion can legitimately yield no
 raised terrain.
 
+The fitter groups stance heights into support levels, compares a continuous ramp with
+discrete steps when raised support is present, fits the selected surfaces to contact
+and free-space evidence, then validates the geometry against the full motion.
+
 The [one-motion retarget command](motion-retargeting.md) uses `--terrain auto` and runs
 reconstruction as part of retargeting. Use the standalone cohort command when you want
 to inspect terrain fits before retargeting a selected set.
@@ -14,6 +18,11 @@ On the fitted SMPL-H path, ramp-versus-stair selection compares supported foot
 orientation with a neutral ankle-to-toe pitch. A measured flat reference takes
 precedence; otherwise TERRA uses the fitted SMPL-H model-rest pitch and records that
 source in the fit report. Other landmark models need their own neutral pitch.
+
+Dataset configs use `[terrain].posed_seat_frame = "apparatus"` by default for both
+reconstruction and retargeting. This subtracts the landmark normalization's vertical
+translation so posed seats share the foot surfaces' ground datum. Set `"normalized"`
+only when the terrain itself is defined in normalized landmark coordinates.
 
 ## Fit one AMASS motion as a cohort of one
 
@@ -81,10 +90,5 @@ The cohort record is a reconstruction report. For
 (such as a published `_terrain.json` sidecar); the cohort report is not the CLI's
 terrain input format. Use `--terrain auto` to let the one-motion retarget command
 estimate terrain directly.
-
-Dataset configs use `[terrain].posed_seat_frame = "apparatus"` by default for both
-reconstruction and retargeting. This subtracts the landmark normalization's vertical
-translation so posed seats share the foot surfaces' ground datum. Set `"normalized"`
-only when the terrain itself is defined in normalized landmark coordinates.
 
 Next: [Motion retargeting](motion-retargeting.md).

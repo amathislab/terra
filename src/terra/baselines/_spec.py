@@ -9,7 +9,7 @@ from types import MappingProxyType
 
 @dataclass(frozen=True)
 class BaselineSpec:
-    """Describe one contribution-free comparison method owned by TERRA."""
+    """Describe one retargeting method used for comparison."""
 
     key: str
     label: str

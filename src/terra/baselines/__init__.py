@@ -1,4 +1,4 @@
-"""Contribution-free baselines distributed and benchmarked with TERRA."""
+"""Comparison retargeting methods distributed with TERRA."""
 
 from types import MappingProxyType
 

@@ -25,8 +25,9 @@ licenses and must be obtained from their original providers.
 | **3. Motion retargeting** | Motion plus terrain → MyoFullBody trajectory, analysis, and terrain sidecar | [Motion retargeting](docs/motion-retargeting.md) |
 | **4. Policy training** | Verified trajectory cohort → terrain-conditioned PPO checkpoint | [Policy training](docs/policy-training.md) |
 
-`terra retarget` runs components 2 and 3 together for one motion. The separate
-reconstruction and training commands serve larger, explicitly selected cohorts.
+`terra retarget` runs components 2 and 3 together for one motion. The standalone
+reconstruction command handles selected cohorts; `terra train select` accepts either
+a validated retargeting cache or completed dataset runs.
 Watch short examples of [terrain reconstruction](docs/assets/videos/reconstruction.mp4),
 [stair retargeting comparison](docs/assets/videos/retargeting-stairs.mp4), and a
 [ramp policy rollout](docs/assets/videos/policy/s00-steep-ascent-ekut-slp201.mp4).
@@ -119,8 +120,8 @@ the Python API, marker inputs, configuration choices, artifact layout, and video
    standalone cohort command, output records, and validation.
 3. [Motion retargeting](docs/motion-retargeting.md) covers the CLI, Python API,
    configuration, and paired output artifacts.
-4. [Policy training](docs/policy-training.md) covers CUDA preflight, verified cohort
-   materialization, a one-update smoke run, and PPO launch.
+4. [Policy training](docs/policy-training.md) covers validated motion selection,
+   materialization, CUDA preflight, a one-update smoke run, and PPO launch.
 
 ## Repository map
 

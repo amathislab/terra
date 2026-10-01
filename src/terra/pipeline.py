@@ -1,4 +1,4 @@
-"""Run the TERRA method or contribution-free OmniRetarget baseline.
+"""Run TERRA retargeting or the OmniRetarget comparison method.
 
 The pipeline prepares SMPL-H landmarks, resolves terrain, configures solver terms,
 runs sequential quadratic programming, and assembles the cached trajectory.
@@ -803,8 +803,7 @@ def _postprocess_solution(
     model = ctx.model
     data = mujoco.MjData(model)
     if not ctx.on_terrain:
-        # Preserve the historical flat path, including measuring landmark error before
-        # ground alignment mutates the root height.
+        # Measure landmark error before ground alignment changes the root height.
         position_error = landmark_error(ctx, data, qpos, retargeter.demo_joints)[1:-1]
         solver_penetration = align_to_ground(ctx, data, qpos)
         trajectory, site_names = assemble_trajectory(ctx, env, env_name, data, qpos)

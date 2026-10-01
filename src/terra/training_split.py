@@ -25,7 +25,7 @@ def _stable_key(seed: str, value: str) -> bytes:
 
 
 def canonical_motion_type(row: Mapping[str, str]) -> str:
-    """Return a manuscript-readable motion type from catalog metadata or identity."""
+    """Return a readable motion type from catalog metadata or identity."""
     motion = row.get("motion", "").strip()
     parts = motion.split("/")
     if len(parts) >= 3 and parts[0] == "Gait120":

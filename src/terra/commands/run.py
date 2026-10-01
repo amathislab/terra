@@ -414,7 +414,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--threads-per-worker",
         type=int,
-        default=_positive_environment_default("TERRA_RUNAI_THREADS_PER_WORKER", 1),
+        default=_positive_environment_default("TERRA_THREADS_PER_WORKER", 1),
         help="BLAS/OpenMP/XLA CPU threads available to each worker",
     )
     parser.add_argument("--motion", action="append", help="Run only this motion; repeatable")
@@ -444,7 +444,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.threads_per_worker < 1:
         raise SystemExit("--threads-per-worker must be positive")
     os.environ["TERRA_RUN_WORKERS"] = str(args.workers)
-    os.environ["TERRA_RUNAI_THREADS_PER_WORKER"] = str(args.threads_per_worker)
+    os.environ["TERRA_THREADS_PER_WORKER"] = str(args.threads_per_worker)
     for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
         os.environ[name] = str(args.threads_per_worker)
     eigen_threads = "false" if args.threads_per_worker == 1 else "true"

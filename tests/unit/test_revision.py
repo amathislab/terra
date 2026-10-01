@@ -42,8 +42,9 @@ def test_source_archive_inside_an_unrelated_git_checkout_remains_packaged(tmp_pa
 
     subprocess.run(["git", "init", str(tmp_path)], check=True, capture_output=True)
     package = tmp_path / "archive/src/terra"
-    package.mkdir(parents=True)
-    (package / "module.py").write_text("VALUE = 1\n")
+    terrain = package / "terrain"
+    terrain.mkdir(parents=True)
+    (terrain / "fitting.py").write_text("VALUE = 1\n")
     assert _source_state(None, package) == "packaged"
     assert _source_state(tmp_path / "archive", package) == "packaged"
     assert _source_state(tmp_path, package) == "dirty"

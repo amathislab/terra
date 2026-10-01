@@ -47,7 +47,7 @@ RAMP_AMBIGUOUS_PROFILE_RMS = 0.5 * DEFAULT_LEVEL_TOL
 # A continuous incline is not identifiable from one interior support position and two
 # endpoint landings: the same three heights are explained by one raised horizontal
 # surface. Two distinct footfalls on the candidate incline are the minimum motion-only
-# evidence for continuity. This is an identifiability requirement, not a dataset prior.
+# evidence for continuity.
 RAMP_MIN_INTERIOR_FOOTFALLS = 2
 
 # The paper ablation removes both physical ramp--step cues while retaining the same

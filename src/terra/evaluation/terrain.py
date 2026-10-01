@@ -237,20 +237,9 @@ class Stance:
 class Swing:
     """One swing between two stances of the same foot.
 
-    Two questions are asked of a swing, and they need different instruments:
-
-    * **dragging** - did the foot lift as much as the source's did? A *relative* question,
-      so both sides must be measured the same way. They were not: the robot's clearance was
-      an exact geom query following the foot's pose frame by frame, the source's was two
-      joint centres dropped by constants measured on its own flat-footed stances. A robot
-      foot that plantarflexes through a swing exposes a low toe to the exact query while the
-      rigid source estimate cannot see the human doing the same. Measured over the subset,
-      that lopsidedness flagged 37 of 67 swings on its own, and it moved with any change to
-      foot pose: fixing the orientation datum took dragging 52 → 67
-      while the like-for-like count went 29 → 30. `peak` is now the like-for-like number.
-    * **scraping** - did the sole actually reach the terrain? An *absolute* question with no
-      source reference, so the exact query is the right instrument and nothing about foot
-      pose can flatter it. That is `touched`, computed all along and never scored.
+    ``peak`` and ``src_peak`` compare robot and source clearance using the same
+    probe-point convention. ``touched`` records the closest exact sole-to-terrain
+    distance, which detects scraping without a source reference.
     """
 
     side: str
@@ -914,13 +903,8 @@ def measure(
     qpos = np.asarray(traj.data.qpos)
     n = len(qpos)
 
-    # **The source and the result are not on the same timebase**, and every comparison in
-    # this module is frame-by-frame. Retargeting writes its trajectory at the environment's
-    # own rate (100 Hz) whatever the clip was captured at, so a 120 fps source runs 20% fast
-    # against it: by the end of a 6 s clip the "source stance" being compared to the robot is
-    # a second and a quarter earlier than the robot's. This used to truncate instead, which
-    # is exact only when the two rates already agree - true for 98 of the non-flat 100 and
-    # all 40 ramps, and false for every BML and EyesJapan chair clip.
+    # Compare source and robot on a common timebase. Retargeted trajectories use the
+    # environment rate, which can differ from the source capture rate.
     from terra.evaluation.timeline import load_source_motion
 
     analysis_path = Path(traj_path).with_name(Path(traj_path).stem + "_analysis.npz")

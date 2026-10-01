@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,11 @@ from terra.benchmarking.reconstruction.core import (
     PreparedMotion,
     ReconstructionResult,
     load_selection,
+)
+from terra.benchmarking.reconstruction.provenance import (
+    _source_commit,
+    _source_state,
+    _source_tree_sha256,
 )
 
 
@@ -70,6 +76,37 @@ def test_registry_is_the_complete_supported_method_inventory():
 
 def test_registry_labels_terra():
     assert RECONSTRUCTION_METHODS["terra"].display_name == "TERRA"
+
+
+def test_reconstruction_source_identity_ignores_unrelated_code(tmp_path):
+    repo = tmp_path / "repo"
+    package = repo / "src/terra"
+    fitting = package / "terrain/fitting.py"
+    tracking = package / "rl/tracking.py"
+    fitting.parent.mkdir(parents=True)
+    tracking.parent.mkdir(parents=True)
+    fitting.write_text("FIT = 1\n")
+    tracking.write_text("TRACK = 1\n")
+
+    def git(*args):
+        return subprocess.check_output(["git", "-C", str(repo), *args], text=True).strip()
+
+    git("init", "-q")
+    git("add", ".")
+    git("-c", "user.name=Test", "-c", "user.email=test@example.org", "commit", "-qm", "source")
+    source_commit = _source_commit(repo, package)
+    source_hash = _source_tree_sha256(package)
+    tracking.write_text("TRACK = 2\n")
+    git("add", ".")
+    git("-c", "user.name=Test", "-c", "user.email=test@example.org", "commit", "-qm", "tracking")
+
+    assert _source_commit(repo, package) == source_commit
+    assert _source_tree_sha256(package) == source_hash
+    assert _source_state(repo, package) == "clean"
+
+    fitting.write_text("FIT = 2\n")
+    assert _source_tree_sha256(package) != source_hash
+    assert _source_state(repo, package) == "dirty"
 
 
 

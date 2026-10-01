@@ -343,9 +343,6 @@ class TerraRetargeter(InteractionMeshRetargeter if OMNIRETARGET_INSTALLED else o
         try:
             return super().retarget_motion(*args, **kwargs)
         finally:
-            # With overlapping calls, only the outer call that still observes our helper
-            # should restore its predecessor; this avoids leaving the helper installed if
-            # calls exit in the opposite order from entry.
             if _imr.calculate_laplacian_coordinates is _calculate_laplacian_coordinates:
                 _imr.calculate_laplacian_coordinates = omniretarget_calculate
             if _imr.get_adjacency_list is _get_adjacency_list:

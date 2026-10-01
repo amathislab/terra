@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import csv
-import hashlib
 import json
 import math
 from collections import defaultdict
@@ -12,7 +11,7 @@ from dataclasses import asdict, dataclass
 from itertools import pairwise
 from pathlib import Path
 
-from terra._files import atomic_write
+from terra._files import atomic_write, file_sha256
 from terra._methods import RetargetingMethod, validate_method
 from terra._revision import write_git_commit
 from terra.artifacts import validate_retarget_artifacts
@@ -173,14 +172,6 @@ def selection_segment(row: Mapping[str, str]) -> SelectionSegment | None:
             f"segmented selection motion must be {expected_motion!r}, got {row.get('motion')!r}"
         )
     return segment
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _resolved_source_root(
@@ -408,9 +399,9 @@ def publish_segmented_selection(
     atomic_write(destination, write_csv)
     payload = dict(audit) | {
         "source_selection": str(source),
-        "source_selection_sha256": _sha256(source),
+        "source_selection_sha256": file_sha256(source),
         "selection": str(destination),
-        "selection_sha256": _sha256(destination),
+        "selection_sha256": file_sha256(destination),
     }
     atomic_write(
         resolved_audit,

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
 import math
 import os
@@ -14,7 +13,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from terra._files import atomic_write
+from terra._files import atomic_write, file_sha256
 from terra._methods import SUPPORTED_METHODS, RetargetingMethod, validate_method
 from terra._revision import write_git_commit
 from terra.artifacts import (
@@ -44,18 +43,10 @@ class _ResolvedRow:
     segment: SelectionSegment | None
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def _atomic_transfer(source: Path, destination: Path, mode: str, *, overwrite: bool) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
-        if _sha256(destination) == _sha256(source):
+        if file_sha256(destination) == file_sha256(source):
             return
         if not overwrite:
             raise FileExistsError(f"destination differs from frozen source: {destination}")

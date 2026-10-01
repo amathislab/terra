@@ -119,37 +119,6 @@ def test_train_help_describes_nested_commands_without_importing_training(monkeyp
     assert "materialize" in output
 
 
-def test_superseded_script_wrappers_are_removed() -> None:
-    retired_wrappers = (
-        "darmstadt/to_smplh.py",
-        "gait120/merge_staging.py",
-        "gait120/prepare_smplh.py",
-        "gait120/to_smplh.py",
-        "vielemeyer/to_smplh.py",
-        "terra/_terrain_render.py",
-        "terra/materialize_training_subset.py",
-        "terra/run_dataset.py",
-        "terra/run_terrain_reconstruction_matrix.py",
-        "terra/score_terrain_subset.py",
-        "terra/render_terrain_subset.py",
-        "terra/training_cohort_review_manifest.py",
-        "terra/validate_dataset_preflight.py",
-    )
-    assert all(not (REPO / "scripts" / path).exists() for path in retired_wrappers)
-
-    for path in (
-        REPO / "src/terra/commands/run.py",
-        REPO / "src/terra/commands/materialize.py",
-        REPO / "src/terra/commands/selection.py",
-        REPO / "src/terra/visualization/render.py",
-        REPO / "src/terra/visualization/cli.py",
-        REPO / "src/terra/benchmarking/reconstruction/core.py",
-    ):
-        source = path.read_text()
-        assert "scripts.terra" not in source
-        assert "sys.path" not in source
-
-
 def test_dataset_configs_have_one_package_owned_copy() -> None:
     from terra.datasets.config import DATASET_CONFIG_NAMES, bundled_dataset_config
 

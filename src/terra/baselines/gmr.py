@@ -29,8 +29,7 @@ GMR_BASELINE = BaselineSpec(
         "exact_target_fps": False,
         "solver": "daqp",
         "damping": 0.5,
-        # Match upstream GMR's released safety default instead of the historical
-        # MuscleMimic wrapper fallback.
+        # Use GMR's released velocity limit.
         "use_velocity_limit": True,
         "use_fitted_shape": True,
         "allow_cache_download": False,
@@ -45,9 +44,8 @@ def runtime_paths(
 ) -> Iterator[None]:
     """Scope the two path variables still required by the pinned GMR backend.
 
-    LocoMuJoCo's GMR shape fitter does not yet accept its cache root as an argument.
-    Keep that legacy process-global interface behind one serialized adapter and restore
-    the caller's environment exactly after the backend returns.
+    LocoMuJoCo's GMR shape fitter reads these paths from the environment. Serialize
+    calls that set them and restore the caller's values afterward.
     """
 
     if cache_root is None and model_root is None:

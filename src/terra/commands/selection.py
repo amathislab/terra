@@ -1,4 +1,4 @@
-"""Build a training selection from completed TERRA dataset runs."""
+"""Build a training selection from validated retargeted artifacts."""
 
 from __future__ import annotations
 
@@ -150,6 +150,59 @@ def _verified_run(path: Path) -> tuple[dict[str, object], list[dict[str, str]]]:
     return payload, rows
 
 
+def _selection_row(
+    cache_root: Path,
+    motion: str,
+    dataset: str,
+    terrain_mode: str,
+    motion_type: str = "",
+    env_name: str = "MyoFullBody",
+) -> dict[str, str]:
+    validated = validate_retarget_artifacts(
+        cache_root,
+        motion,
+        method="terra",
+        env_name=env_name,
+        require_nonflat_terrain=terrain_mode == "nonflat",
+    )
+    if terrain_mode == "flat" and validated.nonflat_terrain:
+        raise ValueError(f"flat training selection contains non-flat terrain: {motion!r}")
+    try:
+        trajectory_relpath = str(validated.trajectory_path.relative_to(cache_root))
+        analysis_relpath = str(validated.analysis_path.relative_to(cache_root))
+        terrain_relpath = (
+            "" if validated.terrain_path is None else str(validated.terrain_path.relative_to(cache_root))
+        )
+    except ValueError as error:
+        raise ValueError(f"validated artifact escaped its cache root for {motion!r}") from error
+    return {
+        "motion": motion,
+        "dataset": dataset,
+        "source_cache_root": str(cache_root),
+        "trajectory_relpath": trajectory_relpath,
+        "analysis_relpath": analysis_relpath,
+        "terrain_relpath": terrain_relpath,
+        "motion_type": motion_type,
+        "split": "train",
+    }
+
+
+def build_cache_selection(
+    cache_root: Path,
+    motions: list[str],
+    *,
+    dataset: str,
+    terrain_mode: str = "mixed",
+) -> list[dict[str, str]]:
+    """Select validated artifacts directly from a retargeting cache."""
+    if terrain_mode not in TERRAIN_MODES:
+        raise ValueError(f"terrain_mode must be one of {', '.join(TERRAIN_MODES)}")
+    if not dataset.strip() or not motions or len(motions) != len(set(motions)):
+        raise ValueError("provide a dataset label and unique motion IDs")
+    root = cache_root.expanduser().resolve()
+    return [_selection_row(root, motion, dataset, terrain_mode) for motion in motions]
+
+
 def build_selection(
     runs: list[Path],
     *,
@@ -194,36 +247,15 @@ def build_selection(
     for motion in selected:
         run, _manifest_row = available[motion]
         cache_root = Path(str(run["cache_root"])).expanduser().resolve()
-        validated = validate_retarget_artifacts(
-            cache_root,
-            motion,
-            method="terra",
-            env_name=str(run["env_name"]),
-            require_nonflat_terrain=terrain_mode == "nonflat",
-        )
-        if terrain_mode == "flat" and validated.nonflat_terrain:
-            raise ValueError(f"flat training selection contains non-flat terrain: {motion!r}")
-        try:
-            trajectory_relpath = str(validated.trajectory_path.relative_to(cache_root))
-            analysis_relpath = str(validated.analysis_path.relative_to(cache_root))
-            terrain_relpath = (
-                ""
-                if validated.terrain_path is None
-                else str(validated.terrain_path.relative_to(cache_root))
-            )
-        except ValueError as error:
-            raise ValueError(f"validated artifact escaped its cache root for {motion!r}") from error
         rows.append(
-            {
-                "motion": motion,
-                "dataset": str(run["dataset"]),
-                "source_cache_root": str(cache_root),
-                "trajectory_relpath": trajectory_relpath,
-                "analysis_relpath": analysis_relpath,
-                "terrain_relpath": terrain_relpath,
-                "motion_type": _manifest_row.get("terrain_class", "").strip(),
-                "split": "train",
-            }
+            _selection_row(
+                cache_root,
+                motion,
+                str(run["dataset"]),
+                terrain_mode,
+                _manifest_row.get("terrain_class", "").strip(),
+                str(run["env_name"]),
+            )
         )
     return rows
 
@@ -280,10 +312,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--run",
         action="append",
-        required=True,
         type=Path,
         help="current TERRA run directory or run.json; repeat for each dataset",
     )
+    parser.add_argument("--cache-root", type=Path, help="retargeting cache for a direct artifact selection")
+    parser.add_argument("--motion", action="append", help="motion ID in --cache-root; repeat to select more")
+    parser.add_argument("--dataset", help="dataset label for a direct artifact selection")
     parser.add_argument(
         "--motions",
         type=Path,
@@ -345,18 +379,31 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         roots = StorageRoots.from_environment(Path.cwd())
-        run_paths = [roots.resolve_artifact(path, base=Path.cwd()) for path in args.run]
-        resolved_runs = [path for path in run_paths if path is not None]
-        motions_path = roots.resolve_input(args.motions, base=Path.cwd())
-        selected_motions = None if motions_path is None else read_motion_selection(motions_path)
-        rows = build_selection(
-            resolved_runs,
-            motions=selected_motions,
-            gait120_nonflat_per_movement=args.gait120_nonflat_per_movement,
-            cohort_seed=args.cohort_seed,
-            terrain_mode=args.terrain_mode,
-            duplicate_policy=args.duplicate_policy,
-        )
+        if args.cache_root is not None:
+            if args.run or args.motions or args.gait120_nonflat_per_movement is not None:
+                raise ValueError("--cache-root cannot be combined with --run, --motions, or a Gait120 cohort")
+            if not args.motion or not args.dataset:
+                raise ValueError("--cache-root requires --motion and --dataset")
+            cache_root = roots.resolve_artifact(args.cache_root, base=Path.cwd())
+            assert cache_root is not None
+            rows = build_cache_selection(
+                cache_root, args.motion, dataset=args.dataset, terrain_mode=args.terrain_mode
+            )
+        else:
+            if not args.run or args.motion or args.dataset:
+                raise ValueError("provide --run, or use --cache-root with --motion and --dataset")
+            run_paths = [roots.resolve_artifact(path, base=Path.cwd()) for path in args.run]
+            resolved_runs = [path for path in run_paths if path is not None]
+            motions_path = roots.resolve_input(args.motions, base=Path.cwd())
+            selected_motions = None if motions_path is None else read_motion_selection(motions_path)
+            rows = build_selection(
+                resolved_runs,
+                motions=selected_motions,
+                gait120_nonflat_per_movement=args.gait120_nonflat_per_movement,
+                cohort_seed=args.cohort_seed,
+                terrain_mode=args.terrain_mode,
+                duplicate_policy=args.duplicate_policy,
+            )
         if args.test_fraction is not None or args.evaluation_fraction is not None:
             rows = assign_training_splits(
                 rows,
@@ -382,6 +429,7 @@ def main(argv: list[str] | None = None) -> int:
 __all__ = [
     "SELECTION_FIELDS",
     "balanced_gait120_nonflat_motions",
+    "build_cache_selection",
     "build_selection",
     "main",
     "publish_selection",

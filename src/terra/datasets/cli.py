@@ -6,12 +6,6 @@ import argparse
 import importlib
 import sys
 from collections.abc import Sequence
-from typing import Protocol, cast
-
-
-class _Converter(Protocol):
-    def __call__(self, argv: Sequence[str] | None = None) -> int: ...
-
 
 _CONVERTERS = {
     "gait120": ("terra.datasets.gait120", "Gait120 TRC/MAT release"),
@@ -47,7 +41,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if namespace.dataset is None:
         parser.error("a supported dataset is required")
     module_name, _description = _CONVERTERS[namespace.dataset]
-    converter = cast(_Converter, importlib.import_module(module_name).main)
+    converter = importlib.import_module(module_name).main
     return int(converter(remaining))
 
 

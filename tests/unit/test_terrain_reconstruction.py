@@ -1148,14 +1148,7 @@ def test_fitted_heights_do_not_depend_on_the_input_datum():
         assert a.top == pytest.approx(b.top, abs=1e-9)
 
 
-# ----------------------------------------------------------------------------------------
-# What a level is, and what a surface is
-# ----------------------------------------------------------------------------------------
-# Six defects fixed together on 2026-08-02, and every one of them is the same shape as the
-# six before it: a relative measurement whose two halves were read against different
-# references, or one statistic on one side and a different statistic on the other. The
-# symptom was a staircase 0.07 m wide - narrower than a foot - rendered under a subject
-# descending it.
+# Stair dimensions must be measured against the same corrected support levels.
 
 
 def test_a_tread_is_never_narrower_than_the_footfalls_on_it():

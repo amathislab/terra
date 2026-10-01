@@ -1,11 +1,5 @@
-"""Methods used by the terrain-reconstruction benchmark."""
+"""Terrain reconstruction for the supported TERRA method."""
 
-from .least_squares import LeastSquaresMethod
 from .terra import TerraMethod
-from .voronoi import VoronoiMethod
 
-__all__ = [
-    "LeastSquaresMethod",
-    "TerraMethod",
-    "VoronoiMethod",
-]
+__all__ = ["TerraMethod"]

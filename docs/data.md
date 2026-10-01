@@ -108,9 +108,8 @@ accepts that extraction root or the inner `data/PRISM` directory. Check with
 `find "$TERRA_DATA_ROOT/PRISM" -path "*/subj*/take*.pkl" | head` before converting.
 
 For Darmstadt physiological analysis, retain trial-level EMG and force data alongside
-markers and touchdown records. PRISM mesh scoring needs scene geometry and COP/insole
-data. Raw marker datasets need conversion to TERRA's SMPL-H motion archives; see
-[Motion files](motion-files.md#convert-a-dataset).
+markers and touchdown records. Raw marker datasets need conversion to TERRA's SMPL-H
+motion archives; see [Motion files](motion-files.md#convert-a-dataset).
 
 The marker converters use an L2 pose prior, 100 Stage-I iterations, 12 calibration
 frames, and 80 Stage-II iterations with residual-gate retries at 50 Hz. A configured

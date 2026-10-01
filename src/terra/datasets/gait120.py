@@ -1552,7 +1552,6 @@ def _build_parser(roots: StorageRoots | None = None) -> argparse.ArgumentParser:
         prog="terra convert gait120",
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="For completed conversion shards, use: terra convert gait120 merge --help",
     )
     parser.add_argument(
         "--original-root",
@@ -1651,10 +1650,6 @@ def _build_parser(roots: StorageRoots | None = None) -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
-    if arguments and arguments[0] == "merge":
-        from terra.datasets.gait120_merge import main as merge_main
-
-        return merge_main(arguments[1:])
     roots = StorageRoots.from_environment(Path.cwd())
     args = _build_parser(roots).parse_args(arguments)
     args.original_root = roots.resolve_input(args.original_root, base=Path.cwd())

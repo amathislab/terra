@@ -59,11 +59,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Retarget one SMPL-H, C3D, TRC, or MAT motion and publish its output artifacts."""
 
     arguments = list(sys.argv[1:] if argv is None else argv)
-    if arguments and arguments[0] == "cohort":
-        from terra.commands.retarget_cohort import main as cohort_main
-
-        return cohort_main(arguments[1:])
-
     parser = argparse.ArgumentParser(
         prog="terra retarget",
         description=main.__doc__,

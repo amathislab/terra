@@ -35,7 +35,7 @@ def test_sdist_includes_packaged_prism_but_no_workspace_python(tmp_path: Path) -
         ".gitattributes",
     ):
         shutil.copy2(REPO / filename, source / filename)
-    for directory in ("src", "examples", "scripts", "docs", "tests"):
+    for directory in ("src", "scripts", "docs", "tests"):
         shutil.copytree(REPO / directory, source / directory)
 
     prism_workspace = source / "prism"
@@ -70,7 +70,7 @@ def test_sdist_includes_packaged_prism_but_no_workspace_python(tmp_path: Path) -
         members = {Path(name).as_posix() for name in archive.getnames()}
 
     assert any(name.endswith("/src/terra/datasets/prism/adapter.py") for name in members)
-    assert any(name.endswith("/src/terra/benchmarking/terrain/voronoi.py") for name in members)
+    assert any(name.endswith("/src/terra/benchmarking/reconstruction/methods/terra.py") for name in members)
     assert any(name.endswith("/src/terra/_build_commit.txt") for name in members)
     assert any(name.endswith("/src/terra/rl/configs/ppo_multi_motion.yaml") for name in members)
     assert any(name.endswith("/terra_build_backend.py") for name in members)

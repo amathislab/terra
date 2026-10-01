@@ -12,7 +12,6 @@ from pathlib import Path
 
 DATASET_CONFIG_NAMES = (
     "amass",
-    "amass-locomotion",
     "darmstadt",
     "gait120",
     "prism",

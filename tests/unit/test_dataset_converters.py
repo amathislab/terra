@@ -46,17 +46,6 @@ def test_convert_dispatches_only_selected_dataset(monkeypatch, dataset, module_n
     assert calls == [module_name]
 
 
-def test_gait120_merge_is_a_package_owned_nested_command(monkeypatch) -> None:
-    calls = []
-    monkeypatch.setattr(
-        "terra.datasets.gait120_merge.main",
-        lambda argv: calls.append(list(argv)) or 29,
-    )
-
-    assert gait120.main(["merge", "shard-a", "--destination", "merged"]) == 29
-    assert calls == [["shard-a", "--destination", "merged"]]
-
-
 def test_converter_defaults_follow_external_storage_roots(tmp_path: Path, monkeypatch) -> None:
     data_root = tmp_path / "source-data"
     artifact_root = tmp_path / "generated"

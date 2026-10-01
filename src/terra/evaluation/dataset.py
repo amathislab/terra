@@ -1,8 +1,6 @@
 """Run retargeting metrics for one explicit dataset manifest.
 
-Terrain-reconstruction scoring is deliberately excluded. Use
-``terra evaluate reconstruction`` and ``terra evaluate prism-mesh`` for reconstructed
-terrain records.
+This command scores retargeted motions using an explicit dataset manifest.
 """
 
 from __future__ import annotations
@@ -18,7 +16,6 @@ from terra.dataset_pipeline import DatasetConfig, load_dataset_config
 from terra.datasets.config import bundled_dataset_config
 
 # Keep the existing wire value so completed retargeting-only evaluations remain usable.
-# The benchmark reader now rejects records containing reconstruction stages.
 RETARGET_EVALUATION_SCHEMA = "terra.dataset-evaluation"
 DEFAULT_METHOD_LABELS = {
     "terra": "TERRA",

@@ -367,7 +367,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=Path,
         help=(
             "CSV/TXT selection used to filter the dataset; packaged cohorts include "
-            "'amass-locomotion', 'amass-nonflat', and 'prism-nonflat'"
+            "'amass', 'darmstadt', 'gait120', 'prism', and 'vielemeyer'"
         ),
     )
     parser.add_argument(

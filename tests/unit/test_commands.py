@@ -27,12 +27,10 @@ def test_root_help_lists_supported_commands_without_loading_workflows(monkeypatc
         name in output
         for name in (
             "convert",
-            "biomechanics",
             "retarget",
             "reconstruct",
             "run",
             "evaluate",
-            "benchmark",
             "visualize",
             "train",
         )
@@ -56,28 +54,16 @@ def test_root_help_lists_supported_commands_without_loading_workflows(monkeypatc
             ["motion.npz", "--output-root", "runs/out"],
         ),
         (
-            ["biomechanics", "--dataset", "gait120"],
-            "terra.datasets.biomechanics_averages",
-            "main",
-            ["--dataset", "gait120"],
-        ),
-        (
-            ["reconstruct", "cohort", "--method", "contact-least-squares"],
+            ["reconstruct", "cohort", "--method", "terra"],
             "terra.benchmarking.reconstruction.cli",
             "command_main",
-            ["cohort", "--method", "contact-least-squares"],
+            ["cohort", "--method", "terra"],
         ),
         (
             ["evaluate", "metrics", "--motion-class", "all=cohort.csv"],
             "terra.evaluation.cli",
             "main",
             ["metrics", "--motion-class", "all=cohort.csv"],
-        ),
-        (
-            ["benchmark", "--retarget-evaluation", "evaluation-dir", "--output-root", "benchmark-dir"],
-            "terra.evaluation.benchmark",
-            "main",
-            ["--retarget-evaluation", "evaluation-dir", "--output-root", "benchmark-dir"],
         ),
         (["run", "amass", "--dry-run"], "terra.commands.run", "main", ["amass", "--dry-run"]),
         (["visualize", "--manifest", "cohort.csv"], "terra.visualization.cli", "main", ["--manifest", "cohort.csv"]),
@@ -158,8 +144,6 @@ def test_superseded_script_wrappers_are_removed() -> None:
         REPO / "src/terra/visualization/render.py",
         REPO / "src/terra/visualization/cli.py",
         REPO / "src/terra/benchmarking/reconstruction/core.py",
-        REPO / "src/terra/benchmarking/reconstruction/matrix.py",
-        REPO / "src/terra/benchmarking/terrain/voronoi.py",
     ):
         source = path.read_text()
         assert "scripts.terra" not in source
@@ -208,12 +192,8 @@ def test_wheel_contains_supported_commands_and_runs_root_help(tmp_path: Path) ->
         "terra/datasets/darmstadt.py",
         "terra/datasets/vielemeyer.py",
         "terra/datasets/marker_fitting.py",
-        "terra/datasets/gait120_merge.py",
         "terra/datasets/prism/conversion.py",
-        "terra/benchmarking/terrain/voronoi.py",
-        "terra/benchmarking/reconstruction/methods/voronoi.py",
         "terra/benchmarking/reconstruction/cli.py",
-        "terra/evaluation/reconstruction_consistency.py",
         "terra/commands/__init__.py",
         "terra/commands/run.py",
         "terra/commands/materialize.py",
@@ -249,10 +229,8 @@ def test_wheel_contains_supported_commands_and_runs_root_help(tmp_path: Path) ->
                 "['convert', 'gait120', '--help'], ['convert', 'darmstadt', '--help'], "
                 "['convert', 'vielemeyer', '--help'], ['convert', 'prism', '--help'], "
                 "['reconstruct', '--help'], ['reconstruct', 'cohort', '--help'], "
-                "['reconstruct', 'matrix', '--help'], ['evaluate', '--help'], "
-                "['evaluate', 'dataset', '--help'], ['evaluate', 'reconstruction', '--help'], "
-                "['evaluate', 'reconstruction-consistency', '--help'], "
-                "['evaluate', 'prism-mesh', '--help'], ['benchmark', '--help']):\n"
+                "['evaluate', '--help'], ['evaluate', 'metrics', '--help'], "
+                "['evaluate', 'dataset', '--help']):\n"
                 "    try:\n"
                 "        main(argv)\n"
                 "    except SystemExit as error:\n"

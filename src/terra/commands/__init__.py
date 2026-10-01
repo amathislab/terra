@@ -19,34 +19,19 @@ _COMMANDS = {
         "main",
         "convert a supported source dataset to SMPL-H motions",
     ),
-    "biomechanics": (
-        "terra.datasets.biomechanics_averages",
-        "main",
-        "build EMG/GRF traces or compare them with a policy rollout",
-    ),
     "retarget": ("terra.cli", "main", "retarget and publish one SMPL-H, C3D, TRC, or MAT motion"),
     "evaluate": (
         "terra.evaluation.cli",
         "main",
         "evaluate explicit method-motion cohorts with the authoritative metrics",
     ),
-    "benchmark": (
-        "terra.evaluation.benchmark",
-        "main",
-        "assemble completed retargeting evaluations into one benchmark",
-    ),
     "reconstruct": (
         "terra.benchmarking.reconstruction.cli",
         "command_main",
-        "fit terrain with one method or a declared cohort matrix",
+        "fit terrain for a selected motion cohort",
     ),
     "run": ("terra.commands.run", "main", "run a configured converted-motion dataset"),
     "visualize": ("terra.visualization.cli", "main", "render published artifacts for review"),
-    "figure": (
-        "terra.figures.cli",
-        "main",
-        "validate and render manifest-driven publication figures",
-    ),
     "train": ("", "", "train a policy, run preflight, or materialize a cohort"),
 }
 
@@ -79,9 +64,6 @@ Policy-training commands:
   preflight [OPTIONS]        validate algorithm config, JAX, Warp, and CUDA readiness
   select [OPTIONS]           verify current TERRA runs and build an ordered selection
   segment [OPTIONS]          split selection clips longer than a duration threshold
-  retarget-selection [...]   build a baseline selection from audited artifact caches
-  baseline-selections [...] build matched clipped selections for retargeting methods
-  subset [OPTIONS]           select a stratified train cohort without splitting clips
   materialize [OPTIONS]      build one verified cross-dataset training cache
 
 Use `terra train COMMAND --help` for command-specific options.
@@ -101,12 +83,6 @@ def _train(argv: Sequence[str]) -> int:
         return _invoke("terra.commands.selection", "main", remaining)
     if command == "segment":
         return _invoke("terra.commands.segment", "main", remaining)
-    if command == "retarget-selection":
-        return _invoke("terra.commands.retarget_training_selection", "main", remaining)
-    if command == "baseline-selections":
-        return _invoke("terra.commands.baseline_training", "main", remaining)
-    if command == "subset":
-        return _invoke("terra.commands.subset", "main", remaining)
     if command == "materialize":
         return _invoke("terra.commands.materialize", "main", remaining)
     print(f"terra train: unknown command {command!r}", file=sys.stderr)

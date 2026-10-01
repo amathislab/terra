@@ -8,8 +8,7 @@ raised terrain.
 
 The [one-motion retarget command](motion-retargeting.md) uses `--terrain auto` and runs
 reconstruction as part of retargeting. Use the standalone cohort command when you want
-to inspect a terrain fit before retargeting or compare reconstruction methods on a
-selected set.
+to inspect terrain fits before retargeting a selected set.
 
 ## Fit one AMASS motion as a cohort of one
 
@@ -78,18 +77,10 @@ The cohort record is a reconstruction report. For
 terrain input format. Use `--terrain auto` to let the one-motion retarget command
 estimate terrain directly.
 
-## Compare reconstruction methods
-
-`terra reconstruct matrix` plans or runs a configured multi-dataset comparison,
-including contact least squares, Voronoi, TERRA without physical cues, and full TERRA.
-Use `terra reconstruct matrix --help` to supply your own selected motions and dataset
-configurations. Inspect every status row and the selected denominator before comparing
-method aggregates.
-
-Next: [Motion retargeting](motion-retargeting.md).
-
 Dataset configs accept `[terrain].posed_seat_frame = "normalized"` to measure posed-seat
 heights in normalized landmark coordinates. `"apparatus"` subtracts the landmark
 normalization's vertical translation when placing the seat relative to apparatus ground.
-Without an explicit frame, dataset retargeting uses apparatus coordinates and the
-reconstruction benchmark uses normalized coordinates. Set the frame explicitly in each dataset configuration.
+Set the frame explicitly in each dataset configuration when the apparatus origin differs
+from the normalized source frame.
+
+Next: [Motion retargeting](motion-retargeting.md).

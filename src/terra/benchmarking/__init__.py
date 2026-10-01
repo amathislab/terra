@@ -1,4 +1,4 @@
-"""Benchmark orchestration owned by the installed :mod:`terra` package."""
+"""Terrain reconstruction cohort orchestration."""
 
 from .reconstruction import (
     RECONSTRUCTION_METHODS,

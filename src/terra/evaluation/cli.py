@@ -453,11 +453,7 @@ def _command_help() -> str:
 Evaluation commands:
   metrics ...          score explicit method-motion cohorts with authoritative metrics
   dataset ...          run retargeting metrics using one packaged dataset configuration
-  reconstruction ...   score current registry terrain records against apparatus metadata
-  reconstruction-consistency
-                       score terrain against common source-motion consistency evidence
-  reconstruction-diff  require exact equality between two reconstruction cohorts
-  prism-mesh ...        score PRISM terrain records against reference scene meshes
+
 
 Use `terra evaluate COMMAND --help` for command-specific options.
 """
@@ -475,22 +471,6 @@ def main(argv: list[str] | None = None) -> int:
         from terra.evaluation.dataset import main as dataset_main
 
         return dataset_main(remaining)
-    if command == "reconstruction":
-        from terra.evaluation.reconstruction import main as reconstruction_main
-
-        return reconstruction_main(remaining)
-    if command == "reconstruction-consistency":
-        from terra.evaluation.reconstruction_consistency import main as reconstruction_consistency_main
-
-        return reconstruction_consistency_main(remaining)
-    if command == "reconstruction-diff":
-        from terra.evaluation.reconstruction_diff import main as reconstruction_diff_main
-
-        return reconstruction_diff_main(remaining)
-    if command == "prism-mesh":
-        from terra.datasets.prism.evaluation import main as prism_mesh_main
-
-        return prism_mesh_main(remaining)
     print(f"terra evaluate: unknown command {command!r}", file=sys.stderr)
     print(_command_help(), file=sys.stderr, end="")
     return 2

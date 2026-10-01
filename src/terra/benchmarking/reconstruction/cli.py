@@ -17,7 +17,6 @@ def _command_help() -> str:
 
 Terrain-reconstruction commands:
   cohort --method METHOD ...   fit one current manifest with one registered method
-  matrix [OPTIONS]             plan or execute the configured multi-dataset matrix
 
 Use `terra reconstruct COMMAND --help` for command-specific options.
 """
@@ -33,11 +32,7 @@ def command_main(argv: list[str] | None = None) -> int:
     command, *remaining = arguments
     if command == "cohort":
         return cohort_main(remaining)
-    if command == "matrix":
-        from .matrix import matrix_main
-
-        return matrix_main(remaining)
-    raise SystemExit(f"unknown reconstruction command {command!r}; expected cohort or matrix")
+    raise SystemExit(f"unknown reconstruction command {command!r}; expected cohort")
 
 
 def _json_object(value: str) -> dict[str, Any]:

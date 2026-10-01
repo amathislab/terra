@@ -106,7 +106,6 @@ terra = [
     "py.typed",
     "rl/configs/*.yaml",
     "datasets/configs/*.toml",
-    "benchmarking/reconstruction/*.toml",
 ]
 
 [tool.pytest.ini_options]

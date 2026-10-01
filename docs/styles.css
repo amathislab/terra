@@ -32,8 +32,8 @@ h1{font-size:clamp(28px,3.4vw,48px);font-weight:400;line-height:1.16;letter-spac
 .authors a:hover,.affiliations a:hover{opacity:.78}
 .affiliations{font-size:16px;line-height:1.6;margin:0 auto 24px;max-width:760px;text-wrap:balance}
 .affiliations span{display:block;margin-top:3px}
-.affiliations .epfl-link{display:inline-flex;align-items:center;line-height:1;filter:drop-shadow(0 0 1px #fff9) drop-shadow(0 2px 5px #000c)}
-.affiliations .epfl-link img{display:block;width:69px;height:20px}
+.affiliations .epfl-link{display:inline-flex;align-items:center;line-height:1;filter:drop-shadow(0 1px 4px #000c)}
+.affiliations .epfl-link img{display:block;width:48px;height:14px}
 .hero-link{display:inline-flex;gap:12px;align-items:center;border:1px solid #ffffff80;border-radius:100px;padding:8px 25px;color:#fff;text-decoration:none;font-size:17px;background:#162d2433;backdrop-filter:blur(5px)}
 .hero-link:hover{background:#ffffff20}
 .hero-actions{display:flex;justify-content:center;flex-wrap:wrap;gap:12px}

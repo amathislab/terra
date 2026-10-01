@@ -32,7 +32,7 @@ Watch short examples of [terrain reconstruction](docs/assets/videos/reconstructi
 
 Use **Linux**, **Python 3.11**, [Git](https://git-scm.com/), and
 [uv](https://docs.astral.sh/uv/). Run commands from the repository root. The lockfile
-pins TERRA's Python dependencies and the required MuscleMimic fork. On Linux x86-64, the
+pins TERRA's Python dependencies and the MuscleMimic `terra` branch. On Linux x86-64, the
 locked PyTorch wheel is a CUDA 12.6 build even when fitting on CPU, so allow for a
 substantial first download. A GPU is required for PPO training and policy evaluation; it
 is not required for motion loading or artifact checks.

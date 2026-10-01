@@ -36,9 +36,9 @@ terra --help
 terra retarget --help
 ```
 
-`uv sync --locked` uses the checked-in lockfile, including TERRA's pinned MuscleMimic
-fork, SMPL-X package, and Holosoma dependency. It needs network access to their Git
-repositories and package indexes. The Linux x86-64 PyTorch wheel in this lock is a CUDA
+`uv sync --locked` uses the checked-in lockfile, including TERRA's pinned
+MuscleMimic `terra` branch, SMPL-X package, and Holosoma dependency. It needs
+network access to their Git repositories and package indexes. The Linux x86-64 PyTorch wheel in this lock is a CUDA
 12.6 build, even for CPU fitting; allow disk space and time for the initial download.
 
 Install the extras for your path in one command. For example:
@@ -86,7 +86,7 @@ needed for the [video review step](motion-retargeting.md#render-the-motion).
 | Symptom | Check |
 |---|---|
 | `uv` cannot fetch a Git dependency | Git and network access to the exact repositories in `pyproject.toml`; rerun `uv sync --locked` |
-| `No module named musclemimic` | Activate `.venv` or use `uv run`; the compatible fork is pinned in the base installation |
+| `No module named musclemimic` | Activate `.venv` or use `uv run`; the compatible `terra` branch is pinned in the base installation |
 | SMPL-H model root missing | Set `TERRA_MODEL_ROOT` or pass `--smpl-model-path`; verify `SMPLH_NEUTRAL.pkl` is present |
 | Source file missing or archive fields rejected | Follow the [motion archive contract](motion-files.md#check-one-smpl-h-archive) |
 | C3D reader missing | Sync with `--extra c3d` |

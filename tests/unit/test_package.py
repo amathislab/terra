@@ -91,15 +91,15 @@ def test_package_declares_inline_type_information():
     assert files(terra).joinpath("py.typed").is_file()
 
 
-def test_runtime_forks_are_commit_pinned_wheel_dependencies():
+def test_runtime_git_dependencies_are_commit_pinned():
     project_root = Path(__file__).resolve().parents[2]
     metadata = tomllib.loads((project_root / "pyproject.toml").read_text(encoding="utf-8"))
     requirements = metadata["project"]["dependencies"]
 
     assert (
         "musclemimic @ "
-        "git+https://github.com/amathislab/musclemimic_terra_release.git"
-        "@654678c10d9fe190beb5b75342d91e9ad02dbcd2"
+        "git+https://github.com/amathislab/musclemimic.git"
+        "@f1c2dbfd0d8e31d306b2c4e2369aecdc7bc21993"
     ) in requirements
     assert (
         "holosoma-retargeting @ "

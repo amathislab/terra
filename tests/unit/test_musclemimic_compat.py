@@ -11,7 +11,7 @@ import musclemimic.retargeting as dependency_api
 import terra._musclemimic as compat
 
 
-def test_compatibility_boundary_reexports_the_fork_integration_api():
+def test_compatibility_boundary_reexports_the_terra_integration_api():
     for name in compat._REQUIRED_RETARGETING_EXPORTS:
         assert getattr(compat, name) is getattr(dependency_api, name)
     assert compat.torso_frame.__module__ == "musclemimic.utils.torso_frame"
@@ -28,7 +28,7 @@ def test_incompatible_distribution_fails_with_installation_guidance(tmp_path):
         PYTHONPATH=os.pathsep.join((str(tmp_path), str(source_root))),
     )
     completed = subprocess.run(
-        # Skip site initialization so the development fork's editable import
+        # Skip site initialization so the installed package's editable import
         # finder cannot override the deliberately incompatible fixture.
         [sys.executable, "-S", "-c", "import terra._musclemimic"],
         check=False,
@@ -39,5 +39,5 @@ def test_incompatible_distribution_fails_with_installation_guidance(tmp_path):
     )
 
     assert completed.returncode != 0
-    assert "requires the amathislab/musclemimic_terra_release package" in completed.stderr
+    assert "requires the terra branch of amathislab/musclemimic" in completed.stderr
     assert "a different 'musclemimic' distribution is not compatible" in completed.stderr

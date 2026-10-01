@@ -11,7 +11,7 @@ from __future__ import annotations
 from importlib import import_module
 
 _INSTALL_HINT = (
-    "TERRA requires the amathislab/musclemimic_terra_release package, including its "
+    "TERRA requires the terra branch of amathislab/musclemimic, including its "
     "stable musclemimic.retargeting integration API. Install terra-retargeting "
     "with its pinned dependencies; a different 'musclemimic' distribution is "
     "not compatible."

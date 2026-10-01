@@ -360,13 +360,13 @@ def _quiet_accelerator_probe():
 
 
 def _ppo_warp_compatibility_error() -> str | None:
-    """Return a clear integration error for an unpublished/unsupported fork."""
+    """Return a clear integration error for an unsupported MuscleMimic revision."""
     try:
         from musclemimic.algorithms.common.ppo_distributed import assert_warp_multi_gpu_compatible
     except ImportError:
         return (
             "the installed MuscleMimic revision does not include TERRA's multi-GPU PPO runtime; "
-            "publish and pin the reviewed integration commit before launching PPO"
+            "install TERRA's pinned MuscleMimic terra revision before launching PPO"
         )
     try:
         assert_warp_multi_gpu_compatible()

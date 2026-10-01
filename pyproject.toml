@@ -31,7 +31,7 @@ dependencies = [
     "numpy>=2.2,<2.4",
     "scipy",
     "torch==2.13.0",
-    "musclemimic @ git+https://github.com/amathislab/musclemimic_terra_release.git@654678c10d9fe190beb5b75342d91e9ad02dbcd2",
+    "musclemimic @ git+https://github.com/amathislab/musclemimic.git@f1c2dbfd0d8e31d306b2c4e2369aecdc7bc21993",
     "smplx @ git+https://github.com/amathislab/smplx@a5b8e4ac14f79f3f33fd2cf2a16e6f507146b813",
     "holosoma-retargeting @ git+https://github.com/merc-s/holosoma.git@12022b5ca5e12e460156c2d91a908f80f6c63fa1#subdirectory=src/holosoma_retargeting",
 ]

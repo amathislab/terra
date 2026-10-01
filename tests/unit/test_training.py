@@ -189,7 +189,7 @@ def test_ppo_preflight_rejects_warp_version_with_known_replica_corruption(monkey
     assert "silently corrupt non-zero pmap replicas" in report.error
 
 
-def test_ppo_preflight_reports_unpublished_fork_runtime(monkeypatch):
+def test_ppo_preflight_reports_missing_terra_runtime(monkeypatch):
     import jax
     import warp as wp
 
@@ -197,7 +197,7 @@ def test_ppo_preflight_reports_unpublished_fork_runtime(monkeypatch):
     monkeypatch.setattr(training, "_config_path", lambda _name: Path("/configs/ppo_multi_motion.yaml"))
     monkeypatch.setattr(training, "_compose_training_config", lambda **_kwargs: config)
     monkeypatch.setattr(training, "_validate_training_config", lambda *_args, **_kwargs: "PPOJax")
-    monkeypatch.setattr(training, "_ppo_warp_compatibility_error", lambda: "publish and pin the integration")
+    monkeypatch.setattr(training, "_ppo_warp_compatibility_error", lambda: "install the pinned terra integration")
     monkeypatch.setattr(jax, "devices", lambda _backend: ("gpu:0", "gpu:1", "gpu:2", "gpu:3"))
     monkeypatch.setattr(jax, "default_backend", lambda: "gpu")
     monkeypatch.setattr(wp, "get_cuda_device_count", lambda: 4)
@@ -205,7 +205,7 @@ def test_ppo_preflight_reports_unpublished_fork_runtime(monkeypatch):
     report = training.training_preflight(algorithm="ppo", require_cuda=False)
 
     assert report.ready is False
-    assert report.error == "publish and pin the integration"
+    assert report.error == "install the pinned terra integration"
 
 
 def test_preflight_cli_selects_ppo_and_emits_machine_readable_report(monkeypatch, capsys):

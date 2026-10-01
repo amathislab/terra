@@ -2437,7 +2437,7 @@ wheels = [
 [[package]]
 name = "musclemimic"
 version = "0.1.0"
-source = { git = "https://github.com/amathislab/musclemimic_terra_release.git?rev=654678c10d9fe190beb5b75342d91e9ad02dbcd2#654678c10d9fe190beb5b75342d91e9ad02dbcd2" }
+source = { git = "https://github.com/amathislab/musclemimic.git?rev=f1c2dbfd0d8e31d306b2c4e2369aecdc7bc21993#f1c2dbfd0d8e31d306b2c4e2369aecdc7bc21993" }
 dependencies = [
     { name = "distrax" },
     { name = "flax" },
@@ -4183,7 +4183,7 @@ requires-dist = [
     { name = "holosoma-retargeting", git = "https://github.com/merc-s/holosoma.git?subdirectory=src%2Fholosoma_retargeting&rev=12022b5ca5e12e460156c2d91a908f80f6c63fa1" },
     { name = "jax", extras = ["cuda12"], marker = "platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'cuda'", specifier = "==0.10.2" },
     { name = "joblib" },
-    { name = "musclemimic", git = "https://github.com/amathislab/musclemimic_terra_release.git?rev=654678c10d9fe190beb5b75342d91e9ad02dbcd2" },
+    { name = "musclemimic", git = "https://github.com/amathislab/musclemimic.git?rev=f1c2dbfd0d8e31d306b2c4e2369aecdc7bc21993" },
     { name = "numpy", specifier = ">=2.2,<2.4" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "ruff", marker = "extra == 'dev'" },

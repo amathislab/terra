@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from terra.evaluation.cli import manifest_is_flat, parse_assignment, validate_class_motions
+from terra.evaluation.cli import manifest_is_flat, parse_assignment
 from terra.evaluation.evaluator import (
     Thresholds,
     benchmark_self_penetration,
@@ -20,7 +20,7 @@ from terra.evaluation.evaluator import (
     source_probe_contact_on_output,
     terrain_contact_preservation,
 )
-from terra.evaluation.registry import AUTHORITATIVE_METRICS as METRICS
+from terra.evaluation.registry import METRICS as METRICS
 from terra.evaluation.reporting import (
     aggregate,
     aggregate_joint_limit_sensitivity,
@@ -101,23 +101,8 @@ def test_missing_analysis_has_unknown_calibration_state(tmp_path):
     assert load_site_calibration_state(tmp_path, "method", "motion") is None
 
 
-def test_flat_class_rejects_beam_motion(tmp_path):
-    manifest = tmp_path / "flat.csv"
-    manifest.write_text("motion,terrain_class\nKIT/go_over_beam01_poses,flat\n")
-    with pytest.raises(ValueError, match=r"flat class.*contains terrain motion"):
-        validate_class_motions("Flat", manifest, ["KIT/go_over_beam01_poses"])
 
 
-def test_explicit_flat_name_conflict_override_is_narrow_and_opt_in(tmp_path):
-    manifest = tmp_path / "flat.csv"
-    manifest.write_text("motion,terrain_class\nKIT/go_over_beam01_poses,flat\n")
-
-    validate_class_motions(
-        "Flat",
-        manifest,
-        ["KIT/go_over_beam01_poses"],
-        allow_flat_name_conflicts=True,
-    )
 
 
 def test_canonical_rmse_splits_pelvis_world_and_relative_landmark_error():

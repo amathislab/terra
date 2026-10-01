@@ -17,7 +17,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="terra train segment", description=__doc__)
     parser.add_argument("--selection-manifest", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--audit-out", type=Path, required=True)
+    parser.add_argument("--report-out", type=Path, required=True)
     parser.add_argument(
         "--retargeting-method",
         choices=SUPPORTED_METHODS,
@@ -33,9 +33,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         roots = StorageRoots.from_environment(Path.cwd())
         source = roots.resolve_input(args.selection_manifest, base=Path.cwd())
         destination = roots.resolve_artifact(args.out, base=Path.cwd())
-        audit_path = roots.resolve_artifact(args.audit_out, base=Path.cwd())
-        assert source is not None and destination is not None and audit_path is not None
-        rows, audit = expand_training_segments(
+        report_path = roots.resolve_artifact(args.report_out, base=Path.cwd())
+        assert source is not None and destination is not None and report_path is not None
+        rows, report = expand_training_segments(
             read_manifest(source),
             storage_roots=roots,
             base=Path.cwd(),
@@ -46,9 +46,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         payload = publish_segmented_selection(
             source,
             destination,
-            audit_path,
+            report_path,
             rows,
-            audit,
+            report,
             overwrite=args.overwrite,
         )
     except (FileExistsError, FileNotFoundError, OSError, RuntimeError, TypeError, ValueError) as error:

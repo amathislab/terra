@@ -235,18 +235,6 @@ def _stage1_state_path(clip: Clip, args: argparse.Namespace) -> Path:
     return Path(state_root) / clip.dataset / f"{state_name}.npz"
 
 
-def require_paper_pose_prior() -> None:
-    """Reject host configuration that would replace the paper's L2 pose prior."""
-    from musclemimic.web_viewer.c3d.asset_paths import resolve_pose_body_prior_path
-
-    if resolve_pose_body_prior_path() is not None:
-        raise ValueError(
-            "Paper conversion uses the L2 pose prior. Remove the configured MoSh++ "
-            "body prior from MUSCLEMIMIC_MOSHPP_POSE_BODY_PRIOR_PATH, "
-            "MUSCLEMIMIC_MOSHPP_ASSETS_PATH, and the loco_mujoco path configuration."
-        )
-
-
 def _fit_clip(
     clip: Clip,
     args: argparse.Namespace,
@@ -254,7 +242,6 @@ def _fit_clip(
     force_refit: bool = False,
     retry_failed_fit: bool = False,
 ) -> Clip:
-    require_paper_pose_prior()
     from musclemimic.web_viewer.c3d_to_smpl import fit_smpl_to_c3d, save_motion_data_as_amass_smplh_npz
 
     output_path = Path(clip.output_path)

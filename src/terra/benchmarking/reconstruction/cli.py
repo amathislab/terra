@@ -1,33 +1,20 @@
-"""Command-line entry points for registered terrain reconstruction methods."""
+"""Command-line entry points for TERRA terrain reconstruction."""
 
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
-from typing import Any
 
-from .core import load_selection, run_cohort
-from .registry import available_methods, create_method
-
-
-def _command_help() -> str:
-    return """usage: terra reconstruct COMMAND [ARGS ...]
-
-Terrain-reconstruction commands:
-  cohort --method METHOD ...   fit one current manifest with one registered method
-
-Use `terra reconstruct COMMAND --help` for command-specific options.
-"""
+from .core import run_cohort
+from .methods.terra import TerraMethod
 
 
 def command_main(argv: list[str] | None = None) -> int:
     """Dispatch the installed ``terra reconstruct`` command."""
-
     arguments = list(sys.argv[1:] if argv is None else argv)
     if not arguments or arguments[0] in {"-h", "--help"}:
-        print(_command_help(), end="")
+        print("usage: terra reconstruct cohort [OPTIONS]\n\nFit terrain for a selected motion set.")
         return 0
     command, *remaining = arguments
     if command == "cohort":
@@ -35,56 +22,19 @@ def command_main(argv: list[str] | None = None) -> int:
     raise SystemExit(f"unknown reconstruction command {command!r}; expected cohort")
 
 
-def _json_object(value: str) -> dict[str, Any]:
-    try:
-        # Parse an inline object before treating it as a path. Calling stat on a long JSON
-        # string can raise ENAMETOOLONG before json.loads ever sees the value.
-        parsed = json.loads(value) if value.lstrip().startswith("{") else json.loads(Path(value).expanduser().read_text())
-    except (OSError, json.JSONDecodeError) as error:
-        raise argparse.ArgumentTypeError(f"options must be a JSON object or JSON file: {error}") from error
-    if not isinstance(parsed, dict):
-        raise argparse.ArgumentTypeError("options must contain a JSON object")
-    return parsed
-
-
-def run_registered(
-    method_name: str,
-    motions_path: Path,
-    output_dir: Path,
-    *,
-    dataset_config: Path | None = None,
-    options: dict[str, Any] | None = None,
-) -> int:
-    selection = load_selection(motions_path)
-    method = create_method(
-        method_name,
-        motions=selection.motions,
-        dataset_config=dataset_config,
-        options=options,
-    )
-    return run_cohort(
-        method,
-        motions_path,
-        output_dir,
-    ).exit_code
+def run_terrain_cohort(motions_path: Path, output_dir: Path, *, dataset_config: Path) -> int:
+    return run_cohort(TerraMethod(dataset_config), motions_path, output_dir).exit_code
 
 
 def cohort_main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="terra reconstruct cohort", description=__doc__)
-    parser.add_argument("--method", required=True, choices=available_methods())
+    parser.add_argument("--method", choices=("terra",), default="terra")
     parser.add_argument("--motions", required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
-    parser.add_argument("--dataset-config", type=Path)
-    parser.add_argument("--options", type=_json_object, default={})
+    parser.add_argument("--dataset-config", required=True, type=Path)
     args = parser.parse_args(argv)
     try:
-        return run_registered(
-            args.method,
-            args.motions,
-            args.output_dir,
-            dataset_config=args.dataset_config,
-            options=args.options,
-        )
+        return run_terrain_cohort(args.motions, args.output_dir, dataset_config=args.dataset_config)
     except (FileNotFoundError, OSError, TypeError, ValueError) as error:
         parser.error(str(error))
     return 2

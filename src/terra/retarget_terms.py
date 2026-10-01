@@ -15,7 +15,7 @@ from typing import ClassVar, Protocol
 import mujoco
 import numpy as np
 
-from terra._sqp import _QuadraticTerm, _row_quadratic_terms
+from terra._qp import _QuadraticTerm, _row_quadratic_terms
 from terra.contacts import contact_ramp
 
 RowTerm = tuple[float, np.ndarray, float | np.ndarray]

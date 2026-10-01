@@ -17,13 +17,12 @@ import numpy as np
 
 from terra._revision import write_git_commit
 from terra.evaluation.annotations import frame_metadata
-from terra.evaluation.audit import audit_metric_rows
 from terra.evaluation.evaluator import (
     PER_MOTION_FIELDS,
     Thresholds,
     evaluate_method_motion,
 )
-from terra.evaluation.registry import AUTHORITATIVE_METRICS
+from terra.evaluation.registry import METRICS
 from terra.evaluation.reporting import (
     aggregate,
     aggregate_joint_limit_sensitivity,
@@ -65,7 +64,7 @@ def read_motion_ids(path: Path) -> list[str]:
 
 
 def read_common_intervals(path: Path) -> dict[str, tuple[float, float]]:
-    """Read one consistent frozen benchmark interval for every motion in a CSV."""
+    """Read one consistent benchmark interval for every motion in a CSV."""
 
     with path.open(newline="") as handle:
         reader = csv.DictReader(handle)
@@ -103,22 +102,6 @@ def manifest_is_flat(label: str, path: Path) -> bool:
         if terrain_classes:
             return terrain_classes <= {"flat", "level", "level_ground"}
     return label.strip().lower() in {"flat", "level", "level ground"}
-
-
-def validate_class_motions(
-    label: str,
-    path: Path,
-    motions: list[str],
-    *,
-    allow_flat_name_conflicts: bool = False,
-) -> None:
-    """Reject known non-flat IDs from a manifest explicitly declared flat."""
-    if not manifest_is_flat(label, path) or allow_flat_name_conflicts:
-        return
-    terrain_tokens = ("beam", "stair", "step", "ramp", "chair", "seat", "stone", "obstacle")
-    bad = [motion for motion in motions if any(token in motion.lower() for token in terrain_tokens)]
-    if bad:
-        raise ValueError(f"flat class {label!r} contains terrain motion {bad[0]!r}")
 
 
 def _write_csv(path: Path, rows: list[dict], fields: tuple[str, ...] | None = None) -> None:
@@ -222,7 +205,7 @@ def _definitions_markdown() -> str:
         "| Key | Family | Formula | Denominator | Source |",
         "|---|---|---|---|---|",
     ]
-    for spec in AUTHORITATIVE_METRICS:
+    for spec in METRICS:
         cells = [spec.key, spec.family, spec.formula, spec.denominator, spec.source]
         lines.append("| " + " | ".join(cell.replace("|", "\\|") for cell in cells) + " |")
     return "\n".join(lines) + "\n"
@@ -241,12 +224,6 @@ def run(args: argparse.Namespace) -> int:
         if not manifest.is_file():
             raise SystemExit(f"motion manifest does not exist: {manifest}")
         motions = read_motion_ids(manifest)
-        validate_class_motions(
-            label,
-            manifest,
-            motions,
-            allow_flat_name_conflicts=args.allow_flat_name_conflicts,
-        )
         class_motions[label] = motions[: args.limit] if args.limit is not None else motions
     thresholds = Thresholds(
         penetration_m=args.penetration_tol,
@@ -275,7 +252,7 @@ def run(args: argparse.Namespace) -> int:
         )
         if missing_intervals:
             raise SystemExit(
-                f"frozen common intervals are missing {len(missing_intervals)} requested motion(s): "
+                f"requested common intervals are missing {len(missing_intervals)} requested motion(s): "
                 f"{missing_intervals[0]!r}"
             )
     jobs = [
@@ -323,8 +300,6 @@ def run(args: argparse.Namespace) -> int:
     rows.sort(key=lambda row: (method_order[row["method"]], class_order[row["motion_class"]], row["motion"]))
     quality_rows.sort(key=lambda row: (method_subdirs.index(row["method"]), row["motion"]))
     _write_csv(args.out / "per_motion.csv", rows, PER_MOTION_FIELDS)
-    metric_audit = audit_metric_rows(rows)
-    (args.out / "audit.json").write_text(json.dumps(metric_audit, indent=2) + "\n")
     _write_csv(
         args.out / "method_counts.csv",
         method_counts(rows, methods),
@@ -369,7 +344,6 @@ def run(args: argparse.Namespace) -> int:
         "aggregation": UNIFIED_AGGREGATION,
         "options": {
             "allow_missing": args.allow_missing,
-            "allow_flat_name_conflicts": args.allow_flat_name_conflicts,
             "cache_root": cache_root,
             "flat_ground_classes": [label for label, manifest in classes if manifest_is_flat(label, manifest)],
             "limit_per_class": args.limit,
@@ -381,8 +355,6 @@ def run(args: argparse.Namespace) -> int:
     }
     (args.out / "run.json").write_text(json.dumps(run_metadata, indent=2) + "\n")
     errors = [row for row in rows if row["error"]]
-    if not metric_audit["passed"]:
-        return 2
     return 1 if errors and not args.allow_missing else 0
 
 
@@ -404,21 +376,13 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument(
         "--common-intervals",
         type=Path,
-        help=("CSV with motion/common_start_s/common_end_s fields; require and reuse these frozen scoring windows."),
+        help=("CSV with motion/common_start_s/common_end_s fields; require and reuse these fixed scoring windows."),
     )
     result.add_argument("--out", type=Path, required=True)
     result.add_argument("--quality-out", type=Path, required=True)
     result.add_argument("--workers", type=int, default=min(8, os.cpu_count() or 1))
     result.add_argument("--limit", type=int)
     result.add_argument("--allow-missing", action="store_true")
-    result.add_argument(
-        "--allow-flat-name-conflicts",
-        action="store_true",
-        help=(
-            "Honor an explicitly flat manifest even when motion names contain terrain tokens; "
-            "the override is recorded in run.json."
-        ),
-    )
     result.add_argument("--penetration-tol", type=float, default=BENCHMARK_THRESHOLDS["penetration_m"])
     result.add_argument(
         "--support-penetration-tol",

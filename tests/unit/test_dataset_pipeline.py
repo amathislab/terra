@@ -508,7 +508,7 @@ run_root = "results"
     assert records[0].source_path == source
 
 
-def test_baseline_run_consumes_authoritative_terra_terrain_without_overrides(tmp_path, monkeypatch):
+def test_baseline_run_consumes_terra_terrain_without_overrides(tmp_path, monkeypatch):
     from terra import dataset_pipeline
 
     config_path = _write_config(
@@ -710,7 +710,7 @@ run_root = "experiment/results"
         assert seen["config"] == config.method_overrides
 
 
-def test_baseline_run_accepts_authoritative_implicit_flat_scene(tmp_path, monkeypatch):
+def test_baseline_run_accepts_implicit_flat_scene(tmp_path, monkeypatch):
     from terra import dataset_pipeline
 
     config_path = _write_config(
@@ -967,7 +967,7 @@ run_root = "results"
     assert not (config.run_root / "evaluation").exists()
 
 
-def test_evaluation_dry_run_records_flat_name_conflict_override(tmp_path, monkeypatch, capsys):
+def test_evaluation_dry_run_accepts_declared_flat_motion_names(tmp_path, monkeypatch, capsys):
     config_path = _write_config(
         tmp_path,
         """
@@ -998,14 +998,13 @@ run_root = "results"
             str(manifest),
             "--output-root",
             str(tmp_path / "evaluation"),
-            "--allow-flat-name-conflicts",
             "--dry-run",
         ],
     )
 
     assert evaluate_dataset() == 0
     payload = json.loads(capsys.readouterr().out)
-    assert payload["allow_flat_name_conflicts"] is True
+    assert payload["manifest"] == str(manifest)
 
 
 def test_evaluation_dry_run_accepts_isolated_experiment_cache(tmp_path, monkeypatch, capsys):

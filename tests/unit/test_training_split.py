@@ -10,8 +10,8 @@ from terra.training_split import (
     assign_stratified_splits,
     assign_training_splits,
     canonical_motion_type,
-    split_audit,
     split_identity,
+    split_summary,
 )
 
 
@@ -117,7 +117,7 @@ def test_split_is_deterministic_identity_disjoint_and_stratified():
     }:
         assert counts[("gait120", motion_type, "test")] == 4
         assert counts[("gait120", motion_type, "train")] == 16
-    assert split_audit(first)["splits"] == {"test": 32, "train": 128}
+    assert split_summary(first)["splits"] == {"test": 32, "train": 128}
 
 
 def test_split_requires_motion_type_and_two_identities_per_domain():
@@ -142,23 +142,23 @@ def test_split_keeps_single_identity_motion_types_in_training():
     assert flat_splits == {"train", "test"}
 
 
-def test_split_audit_rejects_identity_leakage():
+def test_split_summary_rejects_identity_leakage():
     rows = [
         _row("Gait120/S001/SlopeAscent/Trial01/AllSteps_stageii", "gait120", "ramp_up") | {"split": "train"},
         _row("Gait120/S001/SlopeAscent/Trial02/AllSteps_stageii", "gait120", "ramp_up") | {"split": "evaluation"},
     ]
     with pytest.raises(ValueError, match="identity leakage"):
-        split_audit(rows)
+        split_summary(rows)
 
 
 def test_evaluation_fraction_creates_a_real_identity_disjoint_validation_split():
     rows = assign_training_splits(
         _cohort(), evaluation_fraction=0.15, test_fraction=0.15, seed="three-way-v1",
     )
-    audit = split_audit(rows)
+    report = split_summary(rows)
 
-    assert set(audit["splits"]) == {"train", "evaluation", "test"}
-    assert all(audit["splits"][name] > 0 for name in audit["splits"])
+    assert set(report["splits"]) == {"train", "evaluation", "test"}
+    assert all(report["splits"][name] > 0 for name in report["splits"])
     identities = defaultdict(set)
     for row in rows:
         identities[split_identity(row["motion"])].add(row["split"])
@@ -176,7 +176,7 @@ def test_select_cli_creates_evaluation_rows(monkeypatch, tmp_path):
 
     def publish(_path, rows, **_kwargs):
         observed["rows"] = rows
-        return {"splits": split_audit(rows)["splits"]}
+        return {"splits": split_summary(rows)["splits"]}
 
     monkeypatch.setattr(selection, "publish_selection", publish)
 
@@ -186,4 +186,4 @@ def test_select_cli_creates_evaluation_rows(monkeypatch, tmp_path):
         "--evaluation-fraction", "0.15",
         "--test-fraction", "0.15",
     ]) == 0
-    assert set(split_audit(observed["rows"])["splits"]) == {"train", "evaluation", "test"}
+    assert set(split_summary(observed["rows"])["splits"]) == {"train", "evaluation", "test"}

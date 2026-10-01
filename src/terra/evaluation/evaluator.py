@@ -16,7 +16,7 @@ import numpy as np
 
 from terra.artifacts import load_retarget_analysis
 from terra.constants import SMPLH_TO_MYOFULLBODY
-from terra.evaluation.registry import AUTHORITATIVE_METRICS
+from terra.evaluation.registry import METRICS
 from terra.evaluation.settings import BENCHMARK_THRESHOLDS, QUALITY_THRESHOLDS
 from terra.evaluation.terrain import (
     TERRAIN_CONTACT_SOURCE_JOINTS,
@@ -100,7 +100,7 @@ DIAGNOSTIC_FIELDS = (
     "desired_contact_transitions",
     *(joint_limit_sensitivity_key(tol) for tol in JOINT_LIMIT_SENSITIVITY_TOLERANCES_RAD),
 )
-PER_MOTION_FIELDS = IDENTITY_FIELDS + tuple(spec.key for spec in AUTHORITATIVE_METRICS) + DIAGNOSTIC_FIELDS + ("error",)
+PER_MOTION_FIELDS = IDENTITY_FIELDS + tuple(spec.key for spec in METRICS) + DIAGNOSTIC_FIELDS + ("error",)
 
 # The order matches ``terra.terrain.DEFAULT_CONTACT_JOINTS`` exactly. OmniRetarget
 # evaluates toe-link motion during desired toe sticking. TERRA's benchmark uses the
@@ -861,15 +861,15 @@ def evaluate_method_motion(
             available_timelines,
         )
         if common_interval_override is not None:
-            frozen_start, frozen_end = common_interval_override
+            requested_start, requested_end = common_interval_override
             tolerance = 1.0e-9
-            if common_start > frozen_start + tolerance or common_end < frozen_end - tolerance:
+            if common_start > requested_start + tolerance or common_end < requested_end - tolerance:
                 raise ValueError(
-                    "candidate timelines do not cover frozen common interval "
-                    f"{frozen_start:.9g}..{frozen_end:.9g}s; available interval is "
+                    "candidate timelines do not cover requested common interval "
+                    f"{requested_start:.9g}..{requested_end:.9g}s; available interval is "
                     f"{common_start:.9g}..{common_end:.9g}s"
                 )
-            common_start, common_end = frozen_start, frozen_end
+            common_start, common_end = requested_start, requested_end
         common_duration = common_end - common_start
         output_times = timeline.output_times()
 

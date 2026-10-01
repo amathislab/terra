@@ -1021,7 +1021,7 @@ def fit_terrain_from_motion(
         neutral_foot_pitch_source: Label recorded with the pitch in the fit report.
         family_evidence_mode: ``"physical"`` uses supported-foot normals and swing
             clearance to select ramp versus steps. ``"height_only"`` is the paper
-            ablation and uses only the frozen contact-height residual rule.
+            ablation and uses only the contact-height residual rule.
         seat: Seat model mode, ``"auto"`` or ``"off"``.
         pelvis_seat_offset: Expected pelvis-center height above a seat in meters.
         calibrated_joint_offsets: Optional anatomical ankle/toe heights measured on a

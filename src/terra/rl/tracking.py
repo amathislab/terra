@@ -203,7 +203,7 @@ class TerraFullBodyTrackingGoal(GoalTrajMimic):
 
     The target root is left in its paired-terrain coordinates when TERRA is
     configured to preserve reference XY. Otherwise it is shifted by the
-    episode's initial reference XY, matching the legacy flat-ground behavior.
+    episode's initial reference XY, using the flat-ground reference origin.
     """
 
     def __init__(
@@ -220,14 +220,14 @@ class TerraFullBodyTrackingGoal(GoalTrajMimic):
         self._root_qpos_indices = None
         self._root_qvel_indices = None
 
-        # Allow this goal to be selected as an override of the legacy TerraGoal
+        # Allow this goal to be selected as an override of TerraGoal
         # without leaking its future-reference parameters into the parent.
-        for legacy_key in (
+        for compact_key in (
             "enable_future_reference_observations",
             "future_reference_stride",
             "future_reference_horizon",
         ):
-            parameters.pop(legacy_key, None)
+            parameters.pop(compact_key, None)
         parameters.update(
             n_step_lookahead=1,
             n_step_stride=1,

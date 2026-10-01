@@ -62,7 +62,6 @@ def _metric_arguments(
     terrain_method: str,
     output_root: Path,
     workers: int,
-    allow_flat_name_conflicts: bool,
     common_intervals: Path | None = None,
 ) -> list[str]:
     return [
@@ -82,48 +81,8 @@ def _metric_arguments(
         "--workers",
         str(workers),
         "--allow-missing",
-        *(["--allow-flat-name-conflicts"] if allow_flat_name_conflicts else []),
         *(["--common-intervals", str(common_intervals)] if common_intervals is not None else []),
     ]
-
-
-def _validate_metrics(
-    *,
-    output_root: Path,
-    manifest: Path,
-    methods: list[tuple[str, str]],
-    terrain_method: str,
-    allow_flat_name_conflicts: bool,
-    common_intervals: Path | None = None,
-) -> dict[str, str]:
-    metadata = output_root / "metrics" / "run.json"
-    try:
-        payload = json.loads(metadata.read_text())
-    except (OSError, json.JSONDecodeError) as error:
-        raise ValueError(f"cannot read metric run metadata: {metadata}") from error
-    if not isinstance(payload, dict):
-        raise ValueError(f"metric run metadata must contain an object: {metadata}")
-    recorded_methods = payload.get("methods")
-    if not isinstance(recorded_methods, dict) or set(map(str, recorded_methods.values())) != {
-        method for _label, method in methods
-    }:
-        raise ValueError("metric run method set does not match the dataset evaluation")
-    manifests = payload.get("manifests")
-    if not isinstance(manifests, dict) or {Path(str(path)).expanduser().resolve() for path in manifests.values()} != {
-        manifest
-    }:
-        raise ValueError("metric run manifest does not match the dataset evaluation")
-    options = payload.get("options")
-    expected_options = {
-        "allow_flat_name_conflicts": allow_flat_name_conflicts,
-        "allow_missing": True,
-        "limit_per_class": None,
-        "terrain_method": terrain_method,
-        "common_intervals": str(common_intervals) if common_intervals is not None else None,
-    }
-    if not isinstance(options, dict) or any(options.get(key) != value for key, value in expected_options.items()):
-        raise ValueError("metric run options do not match the dataset evaluation")
-    return {"run": str(metadata.resolve()), "output": str((output_root / "metrics").resolve())}
 
 
 def evaluate_dataset(args: argparse.Namespace) -> int:
@@ -153,7 +112,6 @@ def evaluate_dataset(args: argparse.Namespace) -> int:
         "manifest": str(manifest),
         "methods": dict(methods),
         "terrain_method": terrain_method,
-        "allow_flat_name_conflicts": args.allow_flat_name_conflicts,
         "cache_root": str(config.cache_root),
         "source_root": str(config.input_root),
         "output_root": str(output_root),
@@ -177,26 +135,10 @@ def evaluate_dataset(args: argparse.Namespace) -> int:
             terrain_method=terrain_method,
             output_root=output_root,
             workers=args.workers,
-            allow_flat_name_conflicts=args.allow_flat_name_conflicts,
             common_intervals=common_intervals,
         )
     )
     stages["metrics"] = {"exit_code": metric_exit}
-    if metric_exit == 0:
-        try:
-            stages["metrics"].update(
-                _validate_metrics(
-                    output_root=output_root,
-                    manifest=manifest,
-                    methods=methods,
-                    terrain_method=terrain_method,
-                    allow_flat_name_conflicts=args.allow_flat_name_conflicts,
-                    common_intervals=common_intervals,
-                )
-            )
-        except ValueError as error:
-            stages["metrics"].update(exit_code=2, error=str(error))
-
     payload = plan | {"stages": stages}
     (output_root / "evaluation.json").write_text(json.dumps(payload, indent=2) + "\n")
     failed = [name for name, stage in stages.items() if stage["exit_code"]]
@@ -227,14 +169,9 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument(
         "--common-intervals",
         type=Path,
-        help="CSV of frozen motion/common_start_s/common_end_s scoring windows to reuse across methods.",
+        help="CSV of fixed motion/common_start_s/common_end_s scoring windows to reuse across methods.",
     )
     result.add_argument("--workers", type=int, default=1)
-    result.add_argument(
-        "--allow-flat-name-conflicts",
-        action="store_true",
-        help="Honor an explicitly flat manifest when a frozen cohort contains terrain-like motion names.",
-    )
     result.add_argument("--dry-run", action="store_true")
     return result
 

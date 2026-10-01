@@ -46,7 +46,7 @@ def _spec(
     return MetricSpec(key, label, unit, decimals, family, formula, denominator, source, **kwargs)
 
 
-AUTHORITATIVE_METRICS = (
+METRICS = (
     _spec(
         "penetration_duration_pct",
         "Environment pen. duration",
@@ -420,7 +420,7 @@ AUTHORITATIVE_METRICS = (
 )
 
 
-def build_registry(specs=AUTHORITATIVE_METRICS) -> dict[str, MetricSpec]:
+def build_registry(specs=METRICS) -> dict[str, MetricSpec]:
     """Build a key registry and reject ambiguous duplicate scientific definitions."""
     registry: dict[str, MetricSpec] = {}
     for spec in specs:

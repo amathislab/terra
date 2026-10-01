@@ -143,7 +143,7 @@ def apply_site_calibration(
 ) -> np.ndarray:
     """Convert SMPL-H joint centres to calibrated MyoFullBody mimic-site positions.
 
-    The legacy fitted-shape cache stores each positional residual in the world frame of its
+    The fitted-shape cache stores each positional residual in the world frame of its
     neutral calibration pose. Convert that residual to the calibrated site frame first,
     then rotate it with the site's world orientation at every motion frame. This exactly
     reproduces the calibrated neutral pose without fixing an anatomical offset in world.

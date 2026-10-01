@@ -1,8 +1,7 @@
-"""Tests for the installed package-owned command surface."""
+"""Tests for the installed bundled command surface."""
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 import sys
 import zipfile
@@ -42,10 +41,10 @@ def test_root_help_lists_supported_commands_without_loading_workflows(monkeypatc
     ("arguments", "expected_module", "expected_function", "expected_arguments"),
     (
         (
-            ["convert", "gait120", "--audit-only"],
+            ["convert", "gait120", "--inspect-only"],
             "terra.datasets.cli",
             "main",
-            ["gait120", "--audit-only"],
+            ["gait120", "--inspect-only"],
         ),
         (
             ["retarget", "motion.npz", "--output-root", "runs/out"],
@@ -119,21 +118,16 @@ def test_train_help_describes_nested_commands_without_importing_training(monkeyp
     assert "materialize" in output
 
 
-def test_dataset_configs_have_one_package_owned_copy() -> None:
+def test_bundled_dataset_configs_are_available() -> None:
     from terra.datasets.config import DATASET_CONFIG_NAMES, bundled_dataset_config
 
     for name in DATASET_CONFIG_NAMES:
-        assert bundled_dataset_config(name) == REPO / "src/terra/datasets/configs" / f"{name}.toml"
-    assert not (REPO / "configs/datasets").exists()
-    assert not (REPO / "src/terra/commands/dataset_configs").exists()
+        assert bundled_dataset_config(name).is_file()
 
 
-def test_wheel_contains_supported_commands_and_runs_root_help(tmp_path: Path) -> None:
-    source = tmp_path / "source"
-    source.mkdir()
-    for filename in ("pyproject.toml", "README.md", "LICENSE"):
-        shutil.copy2(REPO / filename, source / filename)
-    shutil.copytree(REPO / "src", source / "src")
+@pytest.mark.slow
+def test_wheel_contains_supported_commands_and_runs_root_help(tmp_path: Path, release_source: Path) -> None:
+    source = release_source
 
     subprocess.run(
         [
@@ -179,8 +173,6 @@ def test_wheel_contains_supported_commands_and_runs_root_help(tmp_path: Path) ->
     assert expected <= members
     assert all(not name.startswith("scripts/") for name in members)
     assert "terra = terra.commands:main" in entry_points
-    assert "terra-retarget" not in entry_points
-    assert "terra-train" not in entry_points
 
     completed = subprocess.run(
         [

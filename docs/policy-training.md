@@ -32,7 +32,7 @@ terra train select \
 terra train segment \
   --selection-manifest "$TERRA_ARTIFACT_ROOT/training/selection.csv" \
   --out "$TERRA_ARTIFACT_ROOT/training/segmented.csv" \
-  --audit-out "$TERRA_ARTIFACT_ROOT/training/segments.json"
+  --report-out "$TERRA_ARTIFACT_ROOT/training/segments.json"
 terra train materialize \
   --selection-manifest "$TERRA_ARTIFACT_ROOT/training/segmented.csv" \
   --destination-cache "$TERRA_ARTIFACT_ROOT/training/cache" \
@@ -92,3 +92,11 @@ split created by `terra train select --evaluation-fraction`, inspect the dry-run
 output, and rerun without `--dry-run`. Tune the configuration to available GPU memory and keep the materialization record, run configuration, and
 checkpoints together. The one-update smoke test checks startup only; it does not
 establish task performance.
+
+## Validation options
+
+The production PPO defaults use stochastic validation with at least 100 rollouts.
+You can override `experiment.validation.deterministic`, `minimum_total_rollouts`,
+`rollouts_per_motion`, and `max_parallel_rollouts` for your experiment. Rollout counts
+must be positive. GPU validation allocates lanes in groups of 32 and rounds the
+parallel limit upward to the next group; inactive lanes are masked.

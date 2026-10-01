@@ -3,7 +3,7 @@
 TERRA first turns source recordings into a body motion with known units, axes, frame
 rate, and identity. AMASS already provides compatible SMPL-H archives. Marker recordings
 need fitting before retargeting; the dataset converters also write a manifest of
-accepted and failed fits so cohort membership stays auditable.
+accepted and failed fits so you can inspect cohort membership.
 
 ## Supported inputs
 

@@ -63,7 +63,7 @@ def _positive_environment_default(name: str, fallback: int) -> int:
 
 
 def terminal_failure_count(rows: list[dict], *, allow_conversion_failures: bool = False) -> int:
-    """Count terminal failures while optionally accepting frozen conversion rejects."""
+    """Count terminal failures while optionally accepting recorded conversion rejects."""
     accepted = {"ok", "cached"}
     if allow_conversion_failures:
         accepted.add("conversion_failed")
@@ -105,7 +105,7 @@ def read_motion_selection(path: Path) -> list[str]:
 
 
 def _selection_path(value: Path, config: DatasetConfig) -> Path:
-    """Resolve a filesystem selection or a package-owned selection name."""
+    """Resolve a filesystem selection or a bundled selection name."""
 
     from terra.datasets.selections import DATASET_SELECTION_NAMES, bundled_dataset_selection
 

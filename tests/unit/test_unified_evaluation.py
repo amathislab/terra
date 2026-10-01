@@ -1,4 +1,4 @@
-"""Focused contract and formula tests for the package-owned unified evaluator."""
+"""Focused contract and formula tests for the bundled unified evaluator."""
 
 from __future__ import annotations
 
@@ -28,8 +28,8 @@ from terra.evaluation.evaluator import (
     solver_throughput,
 )
 from terra.evaluation.registry import (
-    AUTHORITATIVE_METRICS,
     METRIC_REGISTRY,
+    METRICS,
     REQUIRED_FAMILIES,
     MetricDefinitionConflict,
     build_registry,
@@ -39,12 +39,12 @@ from terra.evaluation.terrain import Measurement, Stance, Swing, Tolerances, sou
 from terra.visualization.render import Flags
 
 
-def test_registry_covers_the_authoritative_metric_union_with_declared_lineage():
-    families = {spec.family for spec in AUTHORITATIVE_METRICS}
+def test_registry_defines_metric_formulas_and_units():
+    families = {spec.family for spec in METRICS}
 
     assert REQUIRED_FAMILIES <= families
-    assert set(METRIC_REGISTRY) == {spec.key for spec in AUTHORITATIVE_METRICS}
-    assert all(spec.formula and spec.denominator and spec.source for spec in AUTHORITATIVE_METRICS)
+    assert set(METRIC_REGISTRY) == {spec.key for spec in METRICS}
+    assert all(spec.formula and spec.denominator and spec.source for spec in METRICS)
 
 
 def test_evaluation_source_shape_uses_the_selected_cache_root(tmp_path):
@@ -73,7 +73,7 @@ def test_evaluator_uses_the_exact_finger_disabled_environment_model():
     )
 
 
-def test_frozen_common_intervals_require_consistent_per_motion_windows(tmp_path):
+def test_common_intervals_require_consistent_per_motion_windows(tmp_path):
     intervals = tmp_path / "per_motion.csv"
     intervals.write_text(
         "motion,method,common_start_s,common_end_s\n"
@@ -94,7 +94,7 @@ def test_frozen_common_intervals_require_consistent_per_motion_windows(tmp_path)
 
 
 def test_registry_rejects_conflicting_definitions():
-    original = AUTHORITATIVE_METRICS[0]
+    original = METRICS[0]
     conflicting = replace(original, formula="a scientifically different formula")
 
     with pytest.raises(MetricDefinitionConflict, match=original.key):
@@ -127,7 +127,7 @@ def test_solver_throughput_emits_t_frame_per_solved_frame(tmp_path):
     }
 
 
-def test_solver_throughput_uses_legacy_producer_timing_without_retargeting(tmp_path):
+def test_solver_throughput_uses_recorded_producer_timing(tmp_path):
     analysis = tmp_path / "motion_analysis.npz"
     np.savez(
         analysis,

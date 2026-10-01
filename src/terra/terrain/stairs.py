@@ -73,7 +73,7 @@ def _regularize_stair_heights(
     """Fit one motion-only shared riser to a coherent sequence of support levels.
 
     The level ordinal is supplied by the already ordered contact-height clusters.  No
-    nominal apparatus height or dataset identity is consulted.  A fail-closed adjustment
+    nominal apparatus height or dataset identity is consulted.  An adjustment
     bound prevents the structural prior from hiding a missing tread, a skipped step, or a
     badly estimated contact level.  When individual stance targets are supplied, the
     least-squares correction is blended back toward the observed level until every

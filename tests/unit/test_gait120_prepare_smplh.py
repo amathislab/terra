@@ -8,9 +8,9 @@ from terra.datasets.gait120 import (
     _filter_clips_by_selection_manifest,
     _summarize_marker_fit_quality,
     _write_manifest,
-    audit_dataset,
     collect_chair_conversion_clips,
     fit_clips,
+    inspect_dataset,
     select_balanced_chair_clips,
     write_chair_selection,
 )
@@ -158,7 +158,7 @@ def test_stool_tasks_are_single_transition_chair_motions():
 
 
 def test_audit_counts_task_specific_step_cardinality(tmp_path):
-    steps, clips, audit = audit_dataset(
+    steps, clips, report = inspect_dataset(
         original_root=tmp_path / "original",
         emg_root=tmp_path / "emg",
         output_root=tmp_path / "output",
@@ -168,10 +168,10 @@ def test_audit_counts_task_specific_step_cardinality(tmp_path):
     )
 
     assert clips == []
-    assert len(steps) == audit["summary"]["expected_steps"] == 8
-    assert audit["by_movement"]["LevelWalking"]["expected_steps"] == 4
-    assert audit["by_movement"]["SitToStand"]["expected_steps"] == 2
-    assert audit["by_movement"]["StandToSit"]["expected_steps"] == 2
+    assert len(steps) == report["summary"]["expected_steps"] == 8
+    assert report["by_movement"]["LevelWalking"]["expected_steps"] == 4
+    assert report["by_movement"]["SitToStand"]["expected_steps"] == 2
+    assert report["by_movement"]["StandToSit"]["expected_steps"] == 2
 
 
 def test_balanced_chair_selection_is_exact_reproducible_and_calibrated(tmp_path):

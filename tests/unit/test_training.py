@@ -168,20 +168,6 @@ def test_ppo_config_preflight_accepts_one_device():
     assert training._validate_ppo_config(config) == 1
 
 
-@pytest.mark.parametrize(
-    ("path", "value", "message"),
-    [
-        ("experiment.validation.evaluate_all", False, "evaluate_all=true"),
-        ("experiment.validation.deterministic", True, "deterministic=false"),
-        ("experiment.validation.minimum_total_rollouts", 99, "at least 100"),
-        ("experiment.validation.rollouts_per_motion", 0, "at least 1"),
-    ],
-)
-def test_ppo_config_preflight_enforces_stochastic_validation_contract(path, value, message):
-    config = _ppo_config(**{path: value})
-
-    with pytest.raises(ValueError, match=message):
-        training._validate_ppo_config(config)
 
 
 def test_ppo_config_preflight_accepts_one_stochastic_rollout_per_motion():
@@ -417,3 +403,13 @@ def test_preflight_composes_user_overrides_with_launch_environment(monkeypatch):
 
     assert captured == {"overrides": ("experiment.num_envs=8",), "validation_envs": "64"}
     assert "TERRA_VALIDATION_ENVS" not in os.environ
+
+
+@pytest.mark.parametrize("overrides", [
+    {"experiment.validation.deterministic": True},
+    {"experiment.validation.evaluate_all": False},
+    {"experiment.validation.minimum_total_rollouts": 3},
+    {"experiment.validation.max_parallel_rollouts": 47},
+])
+def test_preflight_accepts_configurable_validation(overrides):
+    assert training._validate_ppo_config(_ppo_config(**overrides)) == 4

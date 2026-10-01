@@ -234,11 +234,11 @@ def assign_training_splits(
         )
         by_motion = {row["motion"]: row for row in evaluated}
         selected = [by_motion.get(row["motion"], row) for row in selected]
-    split_audit(selected)
+    split_summary(selected)
     return selected
 
 
-def split_audit(rows: Sequence[Mapping[str, str]]) -> dict[str, object]:
+def split_summary(rows: Sequence[Mapping[str, str]]) -> dict[str, object]:
     """Summarize a published split and fail on identity leakage."""
     identities: dict[tuple[str, str], set[str]] = defaultdict(set)
     strata: Counter[tuple[str, str, str]] = Counter()
@@ -276,6 +276,6 @@ __all__ = [
     "assign_stratified_splits",
     "assign_training_splits",
     "canonical_motion_type",
-    "split_audit",
     "split_identity",
+    "split_summary",
 ]

@@ -134,7 +134,9 @@ the Python API, marker inputs, configuration choices, artifact layout, and video
 | `scripts/terra/train_smoke.py`, `docs/` | PPO startup check and end-to-end guides |
 
 For development, run `uv sync --locked --python 3.11 --extra dev`, then
-`uv run --locked --extra dev pytest -q` and `uv build`.
+`uv run --locked --extra dev pytest -q`. Distribution builds and wheel CLI checks run
+with `uv run --locked --extra dev pytest -q --runslow`; build release artifacts with
+`uv build`.
 TERRA is licensed under [Apache-2.0](LICENSE). Third-party code, datasets, body models,
 and checkpoints retain their respective licenses.
 

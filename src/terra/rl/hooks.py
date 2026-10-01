@@ -2,24 +2,18 @@
 
 from __future__ import annotations
 
-import json
 import logging
 
 from omegaconf import OmegaConf
 
 from musclemimic.runner.logging import ExperimentHooks
 from musclemimic.runner.validation_video_recorder import ValidationVideoRecorder
-from terra.rl.validation_diagnostics import audit_validation_initialization
 
 logger = logging.getLogger(__name__)
 
 
 class TerraValidationVideoRecorder(ValidationVideoRecorder):
     """Record validation with TERRA's terrain-safe reference renderer."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.initialization_audits: dict[str, dict] = {}
 
     def _build_env_params(self, agent_conf, tag: str) -> dict:
         parameters = super()._build_env_params(agent_conf, tag)
@@ -45,15 +39,6 @@ class TerraValidationVideoRecorder(ValidationVideoRecorder):
             parameters["trajectory_cache_root"] = ""
             parameters["trajectory_cache_key"] = ""
         return parameters
-
-    def _on_environment_reset(self, env, motion_path: str | None) -> None:
-        audit = audit_validation_initialization(env, motion_path)
-        name = next(
-            (motion_name for motion_name, path in self.named_motions if path == motion_path),
-            "default",
-        )
-        self.initialization_audits[name] = audit
-        print(f"[ValidationVideo] Initialization audit {name}: {json.dumps(audit, sort_keys=True)}")
 
 
 class TerraHooks(ExperimentHooks):

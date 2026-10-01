@@ -333,7 +333,7 @@ def expand_training_segments(
             }
         )
 
-    audit: dict[str, object] = {
+    report: dict[str, object] = {
         "schema_version": 1,
         "retargeting_method": selected_method,
         "required_frequency_hz": required_frequency,
@@ -351,30 +351,30 @@ def expand_training_segments(
         "by_split": dict(sorted(by_split.items())),
         "long_clips": long_clips,
     }
-    return output, audit
+    return output, report
 
 
 def publish_segmented_selection(
     source_manifest: Path,
     destination_manifest: Path,
-    audit_path: Path,
+    report_path: Path,
     rows: Sequence[Mapping[str, str]],
-    audit: Mapping[str, object],
+    report: Mapping[str, object],
     *,
     overwrite: bool = False,
 ) -> dict[str, object]:
-    """Atomically publish a segmented selection and its complete audit."""
+    """Atomically publish a segmented selection and its complete report."""
 
     source = source_manifest.expanduser().resolve()
     destination = destination_manifest.expanduser().resolve()
-    resolved_audit = audit_path.expanduser().resolve()
+    resolved_report = report_path.expanduser().resolve()
     if destination.suffix.casefold() != ".csv":
         raise ValueError("segmented training selection must use a .csv extension")
-    if resolved_audit.suffix.casefold() != ".json":
-        raise ValueError("segmentation audit must use a .json extension")
-    if destination in {source, resolved_audit} or resolved_audit == source:
-        raise ValueError("source selection, segmented selection, and audit paths must differ")
-    collisions = [path for path in (destination, resolved_audit) if path.exists()]
+    if resolved_report.suffix.casefold() != ".json":
+        raise ValueError("segmentation report must use a .json extension")
+    if destination in {source, resolved_report} or resolved_report == source:
+        raise ValueError("source selection, segmented selection, and report paths must differ")
+    collisions = [path for path in (destination, resolved_report) if path.exists()]
     if collisions and not overwrite:
         raise FileExistsError(f"refusing to replace existing segmentation output: {collisions[0]}")
     if not rows:
@@ -392,12 +392,12 @@ def publish_segmented_selection(
             writer.writerows(rows)
 
     atomic_write(destination, write_csv)
-    payload = dict(audit) | {
+    payload = dict(report) | {
         "source_selection": str(source),
         "selection": str(destination),
     }
     atomic_write(
-        resolved_audit,
+        resolved_report,
         lambda temporary: temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8"),
     )
     write_git_commit(destination.parent)

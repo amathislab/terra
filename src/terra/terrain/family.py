@@ -51,7 +51,7 @@ RAMP_AMBIGUOUS_PROFILE_RMS = 0.5 * DEFAULT_LEVEL_TOL
 RAMP_MIN_INTERIOR_FOOTFALLS = 2
 
 # The paper ablation removes both physical ramp--step cues while retaining the same
-# support events, calibrated heights, candidate primitives, and frozen residual gate.
+# support events, calibrated heights, candidate primitives, and contact residual gate.
 FAMILY_EVIDENCE_PHYSICAL = "physical"
 FAMILY_EVIDENCE_HEIGHT_ONLY = "height_only"
 FAMILY_EVIDENCE_MODES = (FAMILY_EVIDENCE_PHYSICAL, FAMILY_EVIDENCE_HEIGHT_ONLY)
@@ -297,13 +297,11 @@ def classify_terrain_family(
         raise ValueError(f"family_evidence_mode must be one of {supported}, got {family_evidence_mode!r}")
 
     if family_evidence_mode == FAMILY_EVIDENCE_HEIGHT_ONLY:
-        # This is the deliberately under-informed paper arm.  It uses the exact legacy
-        # contact-height statistic and 16 mm gate already frozen for the uncalibrated
-        # fallback, but neither supported-foot normals nor swing-clearance trajectories
-        # are evaluated or allowed to break a tie.
+        # Height-only selection uses the contact-height residual without foot
+        # normals or swing-clearance evidence.
         from terra.terrain.ramps import RAMP_MAX_PROFILE_RMS
 
-        residual = ramp.get("legacy_profile_rms", ramp.get("profile_rms"))
+        residual = ramp.get("contact_profile_rms", ramp.get("profile_rms"))
         family = "ramp" if residual is not None and float(residual) <= RAMP_MAX_PROFILE_RMS else "steps"
         reason = "contact-height profile residual only (physical family cues disabled)"
         incline_footfalls = ramp.get("n_footfalls_on_incline")
@@ -381,7 +379,7 @@ def classify_terrain_family(
         # foot interval, retain the calibrated path's joint-intercept profile rather than
         # switching algorithms merely because its primary cue is missing.
         residual = (
-            ramp.get("legacy_profile_rms", ramp.get("profile_rms")) if neutral is None else ramp.get("profile_rms")
+            ramp.get("contact_profile_rms", ramp.get("profile_rms")) if neutral is None else ramp.get("profile_rms")
         )
         family = "ramp" if residual is not None and float(residual) <= RAMP_MAX_PROFILE_RMS else "steps"
         reason = (

@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 
 from terra.evaluation.evaluator import JOINT_LIMIT_SENSITIVITY_TOLERANCES_RAD, joint_limit_sensitivity_key
-from terra.evaluation.registry import AUTHORITATIVE_METRICS, MetricSpec
+from terra.evaluation.registry import METRICS, MetricSpec
 
 INTERACTION_FAMILIES = {
     "environment_penetration",
@@ -22,11 +22,11 @@ INTERACTION_FAMILIES = {
 TABLE_SECTIONS = (
     (
         "Terrain interaction and contact",
-        tuple(spec for spec in AUTHORITATIVE_METRICS if spec.family in INTERACTION_FAMILIES),
+        tuple(spec for spec in METRICS if spec.family in INTERACTION_FAMILIES),
     ),
     (
         "Biomechanical constraints, fidelity, discontinuity, and runtime",
-        tuple(spec for spec in AUTHORITATIVE_METRICS if spec.family not in INTERACTION_FAMILIES),
+        tuple(spec for spec in METRICS if spec.family not in INTERACTION_FAMILIES),
     ),
 )
 HEADLINE_METRIC_KEYS = (
@@ -43,7 +43,7 @@ HEADLINE_METRIC_KEYS = (
     "t_frame_s",
 )
 HEADLINE_METRICS = {
-    spec.key: spec for spec in AUTHORITATIVE_METRICS if spec.key in HEADLINE_METRIC_KEYS
+    spec.key: spec for spec in METRICS if spec.key in HEADLINE_METRIC_KEYS
 }
 HEADLINE_TABLE_SECTIONS = (
     (
@@ -124,7 +124,7 @@ def pooled_mean_std_sem(rows: list[dict], fields: tuple[str, str, str]) -> tuple
     return mean, population_std, sample_sem, count
 
 
-def summary_fields(metrics: tuple[MetricSpec, ...] = AUTHORITATIVE_METRICS) -> tuple[str, ...]:
+def summary_fields(metrics: tuple[MetricSpec, ...] = METRICS) -> tuple[str, ...]:
     return (
         "method",
         "motion_class",
@@ -154,7 +154,7 @@ def aggregate(rows: list[dict], methods, classes) -> list[dict]:
                 "n_motions": len(valid),
                 "n_errors": len(requested) - len(valid),
             }
-            for spec in AUTHORITATIVE_METRICS:
+            for spec in METRICS:
                 if spec.key in POOLED_OBSERVATION_METRICS:
                     mean, std, sem, n = pooled_mean_std_sem(valid, POOLED_OBSERVATION_METRICS[spec.key])
                 else:

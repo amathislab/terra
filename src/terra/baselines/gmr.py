@@ -93,7 +93,7 @@ def prepare_fitted_shape(
 
 
 def fit_motion(env_name, robot_conf, motion_data, logger, config: Mapping[str, object] | None = None):
-    """Run GMR with TERRA's frozen baseline defaults plus explicit overrides."""
+    """Run GMR with TERRA's baseline defaults plus explicit overrides."""
     resolved = GMR_BASELINE.resolved_config(config)
     resolved.pop("algorithm", None)
     resolved.pop("allow_cache_download", None)

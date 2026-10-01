@@ -28,7 +28,7 @@ _EXPORTS = {
     "source_floor_contact_on_output": ("terra.evaluation.evaluator", "source_floor_contact_on_output"),
     "source_probe_contact_on_output": ("terra.evaluation.evaluator", "source_probe_contact_on_output"),
     "terrain_contact_preservation": ("terra.evaluation.evaluator", "terrain_contact_preservation"),
-    "AUTHORITATIVE_METRICS": ("terra.evaluation.registry", "AUTHORITATIVE_METRICS"),
+    "METRICS": ("terra.evaluation.registry", "METRICS"),
     "METRIC_REGISTRY": ("terra.evaluation.registry", "METRIC_REGISTRY"),
     "REQUIRED_FAMILIES": ("terra.evaluation.registry", "REQUIRED_FAMILIES"),
     "MetricDefinitionConflict": ("terra.evaluation.registry", "MetricDefinitionConflict"),
@@ -52,11 +52,11 @@ def __getattr__(name):
 
 
 __all__ = [
-    "AUTHORITATIVE_METRICS",
     "BENCHMARK_THRESHOLDS",
     "DIAGNOSTIC_FIELDS",
     "IDENTITY_FIELDS",
     "JOINT_LIMIT_SENSITIVITY_TOLERANCES_RAD",
+    "METRICS",
     "METRIC_REGISTRY",
     "PER_MOTION_FIELDS",
     "QUALITY_THRESHOLDS",

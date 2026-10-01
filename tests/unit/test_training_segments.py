@@ -112,17 +112,17 @@ def test_expand_and_materialize_long_selection_preserves_split_and_exact_frames(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     row = _source_row(tmp_path, frames=2_501, frequency=100.0, split="test")
-    expanded, audit = expand_training_segments([row], base=tmp_path)
+    expanded, report = expand_training_segments([row], base=tmp_path)
 
     assert len(expanded) == 3
     assert {item["split"] for item in expanded} == {"test"}
     assert [item["motion"] for item in expanded] == [
         segmented_motion_name(row["motion"], index, 3) for index in range(1, 4)
     ]
-    assert audit["source_motion_count"] == 1
-    assert audit["segmented_source_count"] == 1
-    assert audit["output_motion_count"] == 3
-    assert audit["maximum_output_duration_s"] == pytest.approx(8.34)
+    assert report["source_motion_count"] == 1
+    assert report["segmented_source_count"] == 1
+    assert report["output_motion_count"] == 3
+    assert report["maximum_output_duration_s"] == pytest.approx(8.34)
 
     for item in expanded:
         segment = selection_segment(item)
@@ -195,12 +195,12 @@ def test_selection_segment_rejects_tampered_bounds() -> None:
 
 def test_baseline_segments_preserve_method_namespace_and_identity(tmp_path: Path) -> None:
     row = _source_row(tmp_path, frames=2_501, frequency=100.0, method="gmr")
-    expanded, audit = expand_training_segments([row], base=tmp_path, method="gmr")
+    expanded, report = expand_training_segments([row], base=tmp_path, method="gmr")
     destination = tmp_path / "gmr-training-cache"
 
     payload = materialize_subset(expanded, destination, method="gmr", terrain_mode="mixed")
 
-    assert audit["retargeting_method"] == "gmr"
+    assert report["retargeting_method"] == "gmr"
     assert payload["retargeting_method"] == "gmr"
     assert payload["split_counts"] == {"train": 3, "evaluation": 0, "test": 0}
     for item in payload["motions"]:
@@ -224,12 +224,12 @@ def test_materialization_rejects_incomplete_or_cross_split_segment_groups(tmp_pa
 
 def test_custom_segment_bounds_survive_materialization(tmp_path: Path):
     row = _source_row(tmp_path, frames=2_501, frequency=100.0)
-    expanded, audit = expand_training_segments(
+    expanded, report = expand_training_segments(
         [row], base=tmp_path, trigger_seconds=12.0, maximum_segment_seconds=6.0,
     )
 
     assert len(expanded) == 5
-    assert audit["maximum_segment_seconds"] == 6.0
+    assert report["maximum_segment_seconds"] == 6.0
     assert all(selection_segment(item).maximum_segment_seconds == 6.0 for item in expanded)
     payload = materialize_subset(expanded, tmp_path / "custom-cache", terrain_mode="mixed")
     assert payload["split_counts"]["train"] == 5

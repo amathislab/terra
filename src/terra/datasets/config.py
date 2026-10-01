@@ -20,7 +20,7 @@ DATASET_CONFIG_NAMES = (
 
 
 def bundled_dataset_config(name: str) -> Path:
-    """Return one validated package-owned dataset config path."""
+    """Return one validated bundled dataset config path."""
 
     normalized = name.strip().casefold()
     if normalized not in DATASET_CONFIG_NAMES:

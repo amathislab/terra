@@ -111,9 +111,9 @@ For Darmstadt physiological analysis, retain trial-level EMG and force data alon
 markers and touchdown records. Raw marker datasets need conversion to TERRA's SMPL-H
 motion archives; see [Motion files](motion-files.md#convert-a-dataset).
 
-The marker converters use an L2 pose prior, 100 Stage-I iterations, 12 calibration
-frames, and 80 Stage-II iterations with residual-gate retries at 50 Hz. A configured
-MoSh++ GMM prior changes that objective and is rejected. SMPL-H fitting does not need
+The marker converters default to an L2 pose prior, 100 Stage-I iterations, 12 calibration
+frames, and 80 Stage-II iterations with residual-gate retries at 50 Hz. You can configure
+a MoSh++ GMM prior to use a different fitting objective. SMPL-H fitting does not need
 the SMPL-X head-marker correction asset.
 
 This repository does not include licensed raw data, body models, converted trajectories,

@@ -1,4 +1,4 @@
-"""Tests for the installed, package-owned dataset conversion surface."""
+"""Tests for the installed, bundled dataset conversion surface."""
 
 from __future__ import annotations
 

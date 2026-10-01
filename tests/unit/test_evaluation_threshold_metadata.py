@@ -32,7 +32,6 @@ def test_threshold_override_is_recorded_in_csv_and_run_metadata(monkeypatch, tmp
     manifest.write_text("Study/Trial\n")
     output = tmp_path / "evaluation"
     monkeypatch.setattr(cli, "ProcessPoolExecutor", _ImmediatePool)
-    monkeypatch.setattr(cli, "audit_metric_rows", lambda _rows: {"passed": True})
     monkeypatch.setattr(cli, "aggregate", lambda *_args: [])
     monkeypatch.setattr(cli, "write_summary_tables", lambda *_args: None)
     monkeypatch.setattr(cli, "aggregate_joint_limit_sensitivity", lambda *_args: [])

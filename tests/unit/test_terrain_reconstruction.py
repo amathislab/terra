@@ -226,7 +226,7 @@ def test_physical_family_selector_separates_ramp_and_steps_without_a_trained_mod
     assert len(steps.boxes) > 0
 
 
-def test_uncalibrated_family_fallback_keeps_legacy_residual_definition():
+def test_uncalibrated_family_fallback_keeps_offset_residual_definition():
     """A threshold may not be reused with a newly parameterised residual."""
 
     from terra.terrain.family import classify_terrain_family
@@ -238,7 +238,7 @@ def test_uncalibrated_family_fallback_keeps_legacy_residual_definition():
         (),
         {
             "profile_rms": 0.010,
-            "legacy_profile_rms": 0.020,
+            "contact_profile_rms": 0.020,
         },
     )
 
@@ -252,7 +252,7 @@ def test_uncalibrated_family_fallback_keeps_legacy_residual_definition():
         (),
         {
             "profile_rms": 0.010,
-            "legacy_profile_rms": 0.020,
+            "contact_profile_rms": 0.020,
         },
         neutral_foot_pitch={"L": 0.0, "R": 0.0},
     )
@@ -276,7 +276,7 @@ def test_height_only_family_ablation_does_not_evaluate_physical_cues(monkeypatch
         (),
         {
             "profile_rms": 0.030,
-            "legacy_profile_rms": 0.010,
+            "contact_profile_rms": 0.010,
             "n_footfalls_on_incline": 2,
         },
         neutral_foot_pitch={"L": 0.0, "R": 0.0},
@@ -297,7 +297,7 @@ def test_one_interior_footfall_cannot_identify_a_continuous_ramp():
 
     common = {
         "profile_rms": 0.010,
-        "legacy_profile_rms": 0.010,
+        "contact_profile_rms": 0.010,
         "length": 2.0,
     }
     underdetermined = classify_terrain_family(
@@ -436,7 +436,7 @@ def test_prior_only_short_ramp_loses_to_step_swing_without_flat_calibration(monk
         (),
         {
             "profile_rms": 0.006,
-            "legacy_profile_rms": 0.008,
+            "contact_profile_rms": 0.008,
             "length": RAMP_MIN_LENGTH,
         },
     )
@@ -478,7 +478,7 @@ def test_long_near_threshold_profile_can_use_independent_ramp_swing_evidence(mon
         {
             "profile_rms": 0.018,
             "profile_max": 0.036,
-            "legacy_profile_rms": 0.018,
+            "contact_profile_rms": 0.018,
             "length": 3.0,
         },
     )
@@ -490,9 +490,9 @@ def test_long_near_threshold_profile_can_use_independent_ramp_swing_evidence(mon
 @pytest.mark.parametrize(
     "ramp",
     [
-        {"profile_rms": 0.021, "profile_max": 0.036, "legacy_profile_rms": 0.021, "length": 3.0},
-        {"profile_rms": 0.018, "profile_max": 0.041, "legacy_profile_rms": 0.018, "length": 3.0},
-        {"profile_rms": 0.018, "profile_max": 0.036, "legacy_profile_rms": 0.018, "length": 0.80},
+        {"profile_rms": 0.021, "profile_max": 0.036, "contact_profile_rms": 0.021, "length": 3.0},
+        {"profile_rms": 0.018, "profile_max": 0.041, "contact_profile_rms": 0.018, "length": 3.0},
+        {"profile_rms": 0.018, "profile_max": 0.036, "contact_profile_rms": 0.018, "length": 0.80},
     ],
 )
 def test_ramp_swing_cannot_override_motion_resolution_or_observed_span(monkeypatch, ramp):
@@ -649,7 +649,7 @@ def test_a_box_named_outside_the_convention_is_refused_at_build():
     from loco_mujoco.core.terrain import BoxTerrain
 
     mujoco = pytest.importorskip("mujoco")
-    t = BoxTerrain.__new__(BoxTerrain)
+    t = BoxTerrain(None)
     t._pack(TerrainSpec(boxes=(BoxSpec(pos=(0, 0, 0.1), size=(1.0, 0.5, 0.1), name="ramp"),)))
     t.rgba = (0.5, 0.5, 0.5, 1.0)
     with pytest.raises(ValueError, match="invisible to non-penetration"):
@@ -863,7 +863,7 @@ def test_env_geoms_match_the_spec():
     spec = TerrainSpec(boxes=(BoxSpec(pos=(0.1, -0.2, 0.05), size=(1.2, 0.25, 0.05), yaw=0.3),))
     m_spec = mujoco.MjSpec()
     m_spec.worldbody.add_body(name="dummy").add_geom(type=mujoco.mjtGeom.mjGEOM_SPHERE, size=[0.1, 0, 0])
-    terrain = BoxTerrain.__new__(BoxTerrain)
+    terrain = BoxTerrain(None)
     terrain.spec_ = spec
     terrain.rgba = (0.5, 0.5, 0.5, 1.0)
     model = terrain.modify_spec(m_spec).compile()
@@ -886,7 +886,7 @@ def test_sampled_heights_match_the_spec():
             BoxSpec(pos=(-1.5, 0.3, 0.20), size=(0.8, 0.5, 0.25), yaw=-0.9, pitch=-0.18),
         )
     )
-    terrain = BoxTerrain.__new__(BoxTerrain)
+    terrain = BoxTerrain(None)
     terrain._pack(spec)
 
     rng = np.random.default_rng(3)
@@ -906,7 +906,7 @@ def test_sampled_heights_agree_across_backends():
             BoxSpec(pos=(1.4, 0.0, 0.12), size=(0.6, 0.4, 0.2), pitch=-0.3),
         )
     )
-    terrain = BoxTerrain.__new__(BoxTerrain)
+    terrain = BoxTerrain(None)
     terrain._pack(spec)
 
     x = np.linspace(-2, 2, 50)
@@ -1075,9 +1075,7 @@ def test_claimed_footfalls_are_what_bounds_the_lateral_extent():
         FPS,
         exclude_claimed=False,
         stair_flight="off",
-        # Reproduce the historical optional growth explicitly. The universal
-        # default is zero; this test isolates why claimed-footfall clipping is
-        # still necessary when a caller requests extra geometry.
+        # Extra geometry must still clip against already claimed footfalls.
         max_extension=(0.0, 0.15),
     )
     assert worst_overscore(loose) > 0.15, (
@@ -1822,14 +1820,7 @@ def test_a_ramp_landing_never_steps_up_over_its_own_incline():
 
 
 def test_the_riser_leaves_a_sole_on_both_sides_of_it():
-    """A cut placed exactly at the lowest upper footfall puts that whole foot a tread down.
-
-    An invariant of the partition rather than a historical regression: it holds on the code
-    before this change too. It is here because moving the cut to per-footfall centres, which
-    is what fixed `KIT/424/upstairs_downstairs02_poses`, makes the cap coincide with a
-    footfall centre by construction - the fix was 188 mm of error from a one-micron tie, and
-    nothing else in this file would notice it coming back.
-    """
+    """A riser cut must leave each footfall on its supporting tread."""
     riser = 0.20
     offsets = {j: JOINT_OFFSET[j] for j in JOINT_OFFSET}
 

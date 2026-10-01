@@ -6,6 +6,8 @@ retargeting.  The TERRA formulation remains in :mod:`terra.retargeter`.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 from functools import cache
 
 import numpy as np
@@ -263,3 +265,206 @@ def _native_clarabel_qp(
         )
     solution_x = np.asarray(solution.x, dtype=float)
     return solution_x, float(solution.obj_val + constant), solution
+
+
+@dataclass(frozen=True)
+class _QuadraticTerm:
+    """Represent one weighted least-squares term for every QP backend.
+
+    The objective is ``weight * ||jacobian @ step - target||²`` for scalar
+    weights. ``cvxpy_row_scale`` preserves an already-computed per-row square
+    root while ``weight`` stores its square for the native normal equations.
+    """
+
+    jacobian: np.ndarray
+    target: np.ndarray
+    weight: float | np.ndarray
+    cvxpy_row_scale: np.ndarray | None = None
+
+    def as_native_term(self) -> tuple[np.ndarray, np.ndarray, float | np.ndarray]:
+        """Return the native-solver representation without copying arrays."""
+        return self.jacobian, self.target, self.weight
+
+    def cvxpy_expression(self, cp, step):
+        """Build the mathematically equivalent CVXPY expression."""
+        residual = cp.Constant(self.jacobian) @ step - self.target
+        if self.cvxpy_row_scale is not None:
+            return cp.sum_squares(cp.multiply(self.cvxpy_row_scale, residual))
+        return self.weight * cp.sum_squares(residual)
+
+
+@dataclass(frozen=True)
+class _LaplacianLinearization:
+    """Linearized interaction-mesh Laplacian matching objective."""
+
+    jacobian: np.ndarray
+    current: np.ndarray
+    target: np.ndarray
+    row_scale: np.ndarray
+
+    def as_native_term(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Return the native least-squares form ``J step ≈ target - current``."""
+        return self.jacobian, self.target - self.current, self.row_scale**2
+
+    def cvxpy_expression(self, cp, step):
+        """Build the original condensed CVXPY Laplacian expression."""
+        residual = cp.Constant(self.jacobian) @ step + self.current - self.target
+        return cp.sum_squares(cp.multiply(self.row_scale, residual))
+
+
+@dataclass
+class _InequalityConstraints:
+    """Keep equivalent CVXPY and native forms of ordered linear constraints."""
+
+    n_dof: int
+    _cvxpy_builders: list = field(default_factory=list, repr=False)
+    _native_rows: list[np.ndarray] = field(default_factory=list, repr=False)
+    _native_rhs: list[np.ndarray] = field(default_factory=list, repr=False)
+
+    def _append_native(self, jacobian, rhs) -> None:
+        jacobian = np.asarray(jacobian, dtype=float)
+        if jacobian.ndim == 1:
+            jacobian = jacobian.reshape(1, -1)
+        rhs = np.asarray(rhs, dtype=float).reshape(-1)
+        if len(rhs) == 1 and jacobian.shape[0] != 1:
+            rhs = np.full(jacobian.shape[0], rhs.item())
+        if jacobian.shape != (len(rhs), self.n_dof):
+            raise ValueError(f"inequality shape {jacobian.shape} does not match ({len(rhs)}, {self.n_dof})")
+        self._native_rows.append(jacobian)
+        self._native_rhs.append(rhs)
+
+    def add_lower_bound(self, jacobian, rhs) -> None:
+        """Add ``jacobian @ step >= rhs`` in both backend representations."""
+        self._cvxpy_builders.append(lambda step, j=jacobian, r=rhs: [j @ step >= r])
+        self._append_native(jacobian, rhs)
+
+    def add_two_sided(self, jacobian, lower, upper) -> None:
+        """Add lower and upper bounds on one linear projection."""
+        self._cvxpy_builders.append(
+            lambda step, j=jacobian, lo=lower, hi=upper: [
+                j @ step >= lo,
+                j @ step <= hi,
+            ]
+        )
+        self._append_native(jacobian, lower)
+        self._append_native(-jacobian, -upper)
+
+    def add_variable_bounds(self, lower: np.ndarray, upper: np.ndarray) -> None:
+        """Add componentwise bounds without changing the CVXPY expression shape."""
+        self._cvxpy_builders.append(lambda step, lo=lower, hi=upper: [step >= lo, step <= hi])
+        identity = np.eye(self.n_dof)
+        self._append_native(identity, lower)
+        self._append_native(-identity, -upper)
+
+    def native(self) -> tuple[np.ndarray, np.ndarray]:
+        """Stack constraints in the row order required by the native solver."""
+        rows = np.vstack(self._native_rows) if self._native_rows else np.empty((0, self.n_dof))
+        rhs = np.concatenate(self._native_rhs) if self._native_rhs else np.empty(0)
+        return rows, rhs
+
+    def cvxpy(self, step) -> list:
+        """Materialize CVXPY constraints in their original insertion order."""
+        return [constraint for build in self._cvxpy_builders for constraint in build(step)]
+
+
+def _row_quadratic_terms(raw_terms) -> list[_QuadraticTerm]:
+    """Convert scalar one-row linearizations into quadratic terms."""
+    return [
+        _QuadraticTerm(
+            np.asarray(jacobian).reshape(1, -1),
+            np.atleast_1d(target),
+            weight,
+        )
+        for weight, jacobian, target in raw_terms
+    ]
+
+
+def native_condensed_objective(
+    *,
+    nq_a: int,
+    track_nominal_indices: Sequence[int],
+    q_diag: np.ndarray,
+    smooth_weight: float | np.ndarray,
+    laplacian: _LaplacianLinearization,
+    q_a_n_last: np.ndarray,
+    dqa_smooth: np.ndarray,
+    nominal_weight: float,
+    q_a_nominal: np.ndarray | None,
+    attached_terms: Sequence[_QuadraticTerm],
+) -> tuple[list[tuple], list[tuple]]:
+    """Assemble native least-squares and centered-quadratic terms."""
+    least_squares = [laplacian.as_native_term()]
+    if nominal_weight > 0 and q_a_nominal is not None:
+        indices = np.array(track_nominal_indices, dtype=int)
+        if indices.size > 0:
+            selection = np.eye(nq_a)[indices]
+            least_squares.append(
+                (
+                    selection,
+                    q_a_nominal[indices] - q_a_n_last[indices],
+                    nominal_weight,
+                )
+            )
+
+    diagonal = np.asarray(q_diag, dtype=float).reshape(-1)
+    least_squares.append((None, -q_a_n_last, diagonal))
+    centered_quadratics = []
+    if np.isscalar(smooth_weight):
+        least_squares.append((None, dqa_smooth, smooth_weight))
+    else:
+        smoothing = np.asarray(smooth_weight, dtype=float)
+        if smoothing.ndim == 1:
+            least_squares.append((None, dqa_smooth, smoothing))
+        else:
+            centered_quadratics.append((smoothing, dqa_smooth))
+    least_squares.extend(term.as_native_term() for term in attached_terms)
+    return least_squares, centered_quadratics
+
+
+def cvxpy_condensed_objective(
+    cp,
+    step,
+    *,
+    track_nominal_indices: Sequence[int],
+    q_diag: np.ndarray,
+    smooth_weight: float | np.ndarray,
+    laplacian: _LaplacianLinearization,
+    q_a_n_last: np.ndarray,
+    dqa_smooth: np.ndarray,
+    nominal_weight: float,
+    q_a_nominal: np.ndarray | None,
+    attached_terms: Sequence[_QuadraticTerm],
+) -> list:
+    """Build the condensed CVXPY objective in its established term order."""
+    objective = [laplacian.cvxpy_expression(cp, step)]
+    if nominal_weight > 0 and q_a_nominal is not None:
+        indices = np.array(track_nominal_indices, dtype=int)
+        if indices.size > 0:
+            residual = step[indices] - (q_a_nominal[indices] - q_a_n_last[indices])
+            objective.append(nominal_weight * cp.sum_squares(residual))
+
+    diagonal = np.asarray(q_diag, dtype=float).reshape(-1)
+    objective.append(cp.sum_squares(cp.multiply(np.sqrt(diagonal), step + q_a_n_last)))
+    if np.isscalar(smooth_weight):
+        objective.append(smooth_weight * cp.sum_squares(step - dqa_smooth))
+    else:
+        smoothing = np.asarray(smooth_weight, dtype=float)
+        if smoothing.ndim == 1:
+            objective.append(cp.sum_squares(cp.multiply(np.sqrt(smoothing), step - dqa_smooth)))
+        else:
+            objective.append(cp.quad_form(step - dqa_smooth, smoothing))
+    objective.extend(term.cvxpy_expression(cp, step) for term in attached_terms)
+    return objective
+
+
+def updated_pose(
+    q: np.ndarray,
+    q_a_indices: np.ndarray,
+    q_a_n_last: np.ndarray,
+    step: np.ndarray,
+) -> np.ndarray:
+    """Apply an optimizer step and normalize the floating-root quaternion."""
+    updated = np.copy(q)
+    updated[q_a_indices] = step + q_a_n_last
+    updated[3:7] /= np.linalg.norm(updated[3:7]) + 1e-12
+    return updated

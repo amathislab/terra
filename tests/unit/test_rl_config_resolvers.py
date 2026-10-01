@@ -40,7 +40,7 @@ def test_motion_selection_validates_launcher_counts(monkeypatch, tmp_path):
         motion_selection("train", str(record))
 
 
-def test_motion_selection_legacy_validation_falls_back_to_training(monkeypatch):
+def test_motion_selection_validation_falls_back_to_training(monkeypatch):
     monkeypatch.delenv("TERRA_VALIDATION_MOTIONS", raising=False)
     monkeypatch.setenv("TERRA_MOTIONS", '["Study/Zeta","Study/Alpha"]')
 

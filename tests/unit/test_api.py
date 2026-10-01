@@ -361,78 +361,8 @@ def test_retarget_c3d_rejects_managed_option_override(tmp_path, option):
         )
 
 
-def test_retarget_c3d_rejects_unknown_option_before_entering_dependency(monkeypatch, tmp_path):
-    source = tmp_path / "walk.c3d"
-    source.touch()
-    monkeypatch.setattr(
-        api,
-        "retarget_c3d_to_trajectory",
-        lambda *_args, **_kwargs: pytest.fail("dependency adapter should not be called"),
-    )
-
-    with pytest.raises(ValueError, match=r"unknown c3d_options field\(s\): stage3_iters"):
-        api.retarget_c3d(
-            source,
-            terrain=_terrain(),
-            c3d_options={"stage3_iters": 12},
-        )
 
 
-@pytest.mark.parametrize(
-    ("option", "value", "message"),
-    [
-        ("gender", "robot", "gender must be one of"),
-        ("gender", 1, "gender must be a string"),
-        ("surface_model_type", "smpl", "surface_model_type must be one of"),
-        ("surface_model_type", None, "surface_model_type must be a string"),
-        ("optimize_toes", 1, "optimize_toes must be a boolean"),
-        ("clear_cache", "false", "clear_cache must be a boolean"),
-        ("enforce_knee_hinge", 1, "enforce_knee_hinge must be a boolean"),
-        ("strict_frame_picking", None, "strict_frame_picking must be a boolean"),
-        ("wrist_markers_on_stick", "yes", "wrist_markers_on_stick must be a boolean"),
-        ("n_ref_frames", 0, "n_ref_frames must be a positive integer"),
-        ("stage1_iters", 0, "stage1_iters must be a positive integer"),
-        ("stage1_iters", True, "stage1_iters must be a positive integer"),
-        ("stage2_iters", 1.5, "stage2_iters must be a positive integer"),
-        ("stage1_shape_solver", "lbfgs", "stage1_shape_solver must be one of"),
-        ("stage2_solver", "dogleg", "stage2_solver must be one of"),
-        ("seed", -1, "seed must be an integer"),
-        ("seed", True, "seed must be an integer"),
-        ("target_fps", 0, "target_fps must be positive and finite or null"),
-        ("target_fps", float("nan"), "target_fps must be positive and finite or null"),
-        ("least_avail_markers", 0, r"least_avail_markers must be in \(0, 1\]"),
-        ("least_avail_markers", 1.1, r"least_avail_markers must be in \(0, 1\]"),
-        ("stage2_torso_frame_weight", -1, "must be finite and non-negative"),
-        ("device", "gpu", "device must be 'cpu', 'cuda', or 'cuda:<index>'"),
-        ("stage2_marker_weight_overrides", [], "must be an object or null"),
-        ("stage2_marker_weight_overrides", {"LHEE": 0}, "must be positive and finite"),
-        ("stage2_marker_weight_overrides", {1: 2}, "labels must be non-empty strings"),
-        ("converted_c3d_name", 12, "converted_c3d_name must be a string or path"),
-        ("head_marker_corr_path", {}, "head_marker_corr_path must be a string or path"),
-        ("pose_body_prior_path", [], "pose_body_prior_path must be a string or path"),
-    ],
-)
-def test_retarget_c3d_rejects_invalid_option_before_entering_dependency(
-    monkeypatch,
-    tmp_path,
-    option,
-    value,
-    message,
-):
-    source = tmp_path / "walk.c3d"
-    source.touch()
-    monkeypatch.setattr(
-        api,
-        "retarget_c3d_to_trajectory",
-        lambda *_args, **_kwargs: pytest.fail("dependency adapter should not be called"),
-    )
-
-    with pytest.raises(ValueError, match=message):
-        api.retarget_c3d(
-            source,
-            terrain=_terrain(),
-            c3d_options={option: value},
-        )
 
 
 def test_retarget_c3d_forwards_advanced_fit_options(monkeypatch, tmp_path):
@@ -473,6 +403,7 @@ def test_retarget_c3d_forwards_advanced_fit_options(monkeypatch, tmp_path):
             "strict_frame_picking": False,
             "target_fps": 50,
             "wrist_markers_on_stick": True,
+            "upstream_option": "forwarded",
         },
     )
 
@@ -488,6 +419,7 @@ def test_retarget_c3d_forwards_advanced_fit_options(monkeypatch, tmp_path):
     assert captured["strict_frame_picking"] is False
     assert captured["target_fps"] == 50.0
     assert captured["wrist_markers_on_stick"] is True
+    assert captured["upstream_option"] == "forwarded"
 
 
 def test_retarget_c3d_requires_explicit_marker_model_root(tmp_path):

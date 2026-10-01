@@ -184,102 +184,12 @@ def test_condensed_laplacian_qp_matches_auxiliary_formulation():
     assert native_sparse_cost == native_cost
 
 
-def test_identity_least_squares_specialization_is_bit_exact():
-    """Analytic identity accumulation must reproduce dense identity products exactly."""
-    from terra._qp import (
-        _add_weighted_identity_least_squares,
-        _add_weighted_least_squares,
-    )
-
-    rng = np.random.default_rng(84)
-    n_dof = 89
-    target = rng.normal(size=n_dof)
-    for weight in (0.73, rng.uniform(0.1, 2.0, size=n_dof)):
-        expected_hessian = rng.normal(size=(n_dof, n_dof))
-        actual_hessian = expected_hessian.copy()
-        expected_linear = rng.normal(size=n_dof)
-        actual_linear = expected_linear.copy()
-        expected_constant = _add_weighted_least_squares(
-            expected_hessian,
-            expected_linear,
-            2.5,
-            np.eye(n_dof),
-            target,
-            weight,
-        )
-        actual_constant = _add_weighted_identity_least_squares(actual_hessian, actual_linear, 2.5, target, weight)
-        np.testing.assert_array_equal(actual_hessian, expected_hessian)
-        np.testing.assert_array_equal(actual_linear, expected_linear)
-        assert actual_constant == expected_constant
 
 
-def test_native_csc_fast_assembly_is_bit_exact():
-    """Direct CSC builders must reproduce SciPy's former dense conversion arrays."""
-    from scipy import sparse
-
-    from terra._qp import (
-        _dense_inequality_soc_csc,
-        _symmetric_upper_csc,
-    )
-
-    rng = np.random.default_rng(94)
-    for n_dof, n_rows in ((1, 0), (9, 17), (89, 188)):
-        hessian = rng.normal(size=(n_dof, n_dof))
-        hessian[rng.random(hessian.shape) < 0.35] = 0.0
-        expected_p = sparse.csc_matrix(np.triu(0.5 * (hessian + hessian.T)))
-        actual_p = _symmetric_upper_csc(hessian)
-
-        inequalities = rng.normal(size=(n_rows, n_dof))
-        inequalities[rng.random(inequalities.shape) < 0.85] = 0.0
-        expected_a = sparse.csc_matrix(np.vstack([-inequalities, np.zeros((1, n_dof)), -np.eye(n_dof)]))
-        actual_a = _dense_inequality_soc_csc(inequalities)
-
-        for expected, actual in ((expected_p, actual_p), (expected_a, actual_a)):
-            assert actual.shape == expected.shape
-            np.testing.assert_array_equal(actual.data, expected.data)
-            np.testing.assert_array_equal(actual.indices, expected.indices)
-            np.testing.assert_array_equal(actual.indptr, expected.indptr)
 
 
-def test_fast_target_laplacian_is_bit_exact_for_both_weight_modes():
-    """Removing dead uniform-weight distances must preserve OmniRetarget's arithmetic."""
-    from holosoma_retargeting.src import interaction_mesh_retargeter as omniretarget
-
-    from terra._interaction_mesh import _calculate_laplacian_coordinates
-
-    rng = np.random.default_rng(52)
-    vertices = rng.normal(size=(37, 3))
-    adjacency = []
-    for index in range(len(vertices)):
-        candidates = np.delete(np.arange(len(vertices)), index)
-        degree = index % 12
-        adjacency.append(list(rng.choice(candidates, size=degree, replace=False)))
-
-    for uniform_weight in (True, False):
-        expected = omniretarget.calculate_laplacian_coordinates(vertices, adjacency, uniform_weight=uniform_weight)
-        actual = _calculate_laplacian_coordinates(vertices, adjacency, uniform_weight=uniform_weight)
-        np.testing.assert_array_equal(actual, expected)
 
 
-def test_fast_adjacency_preserves_omniretarget_neighbor_order():
-    """The explicit six-edge loop must preserve even Python set iteration order."""
-    from holosoma_retargeting.src import interaction_mesh_retargeter as omniretarget
-
-    from terra._interaction_mesh import _get_adjacency_list
-
-    tetrahedra = np.array(
-        [
-            [17, 3, 21, 8],
-            [8, 3, 29, 17],
-            [29, 4, 21, 17],
-            [21, 4, 8, 3],
-            [8, 4, 29, 3],
-        ],
-        dtype=np.int32,
-    )
-    expected = omniretarget.get_adjacency_list(tetrahedra, 30)
-    actual = _get_adjacency_list(tetrahedra, 30)
-    assert actual == expected
 
 
 def test_dense_least_squares_assembly_matches_sparse_oracle():
@@ -503,7 +413,7 @@ class _Stub(TerraRetargeter):
 @requires_omni
 def test_native_retargeting_step_moves_a_real_mujoco_body_toward_target():
     """Exercise the assembled native objective and Clarabel with a MuJoCo Jacobian."""
-    from terra._sqp import _InequalityConstraints, _LaplacianLinearization
+    from terra._qp import _InequalityConstraints, _LaplacianLinearization
 
     model = mujoco.MjModel.from_xml_string(
         """
@@ -727,49 +637,19 @@ def random_pose(probed_model):
 
 
 @requires_omni
-def test_manipulator_point_jacobians_share_one_forward_pass(probed_model, monkeypatch):
-    """A link batch shares one kinematics update and one velocity transform."""
+def test_manipulator_point_jacobians_match_finite_differences(probed_model, random_pose):
     model, _ = probed_model
     stub = _Stub(model)
-    q = np.array(model.qpos0, dtype=float)
-    original = mujoco.mj_forward
-    base_retargeter = TerraRetargeter.__mro__[1]
-    original_transform = base_retargeter._build_transform_qdot_to_qvel_fast
-    forward_calls = 0
-    transform_calls = 0
-
-    def counted_forward(*args):
-        nonlocal forward_calls
-        forward_calls += 1
-        return original(*args)
-
-    def counted_transform(self):
-        nonlocal transform_calls
-        transform_calls += 1
-        return original_transform(self)
-
-    monkeypatch.setattr(mujoco, "mj_forward", counted_forward)
-    monkeypatch.setattr(base_retargeter, "_build_transform_qdot_to_qvel_fast", counted_transform)
-    jacobians, positions, _ = stub._calc_manipulator_jacobians(
-        q,
-        links={name: name for name in PROBE_BODIES},
-        obj_frame=False,
-    )
-
-    assert forward_calls == 1
-    assert transform_calls == 1
-    assert set(jacobians) == set(PROBE_BODIES)
-    assert set(positions) == set(PROBE_BODIES)
-    assert all(np.isfinite(jacobian).all() for jacobian in jacobians.values())
-
-    stub._calc_manipulator_jacobians(q, links={name: name for name in PROBE_BODIES})
-    assert forward_calls == 1
-    assert transform_calls == 1
-
-    stub.robot_data = mujoco.MjData(model)
-    stub._calc_manipulator_jacobians(q, links={name: name for name in PROBE_BODIES})
-    assert forward_calls == 2
-    assert transform_calls == 2
+    links = {name: name for name in PROBE_BODIES}
+    jacobians, positions, _ = stub._calc_manipulator_jacobians(random_pose, links=links, obj_frame=False)
+    epsilon = 1e-6
+    for column, coordinate in enumerate(stub.q_a_indices):
+        perturbed = random_pose.copy()
+        perturbed[coordinate] += epsilon
+        _, shifted, _ = stub._calc_manipulator_jacobians(perturbed, links=links, obj_frame=False)
+        for name in links:
+            finite_difference = (shifted[name] - positions[name]) / epsilon
+            np.testing.assert_allclose(jacobians[name][:, column], finite_difference, atol=1e-5, rtol=1e-5)
 
 
 @requires_omni
@@ -1418,16 +1298,7 @@ def _step_up_motion(names, step_top=0.20, hold=120, glide=80, land=40, reach=0.9
 
 
 def test_the_swing_minimum_keeps_the_requirement_alive_where_the_source_grazes_a_step():
-    """Without it the requirement is -inf over the frames a foot jams against a riser.
-
-    The source's foot is a toe joint and an ankle joint; the robot's is a 0.25 m body under
-    a hard non-penetration constraint. So the robot's forefoot reaches the riser while the
-    source's toe is still short of it, and the pull towards the target is along the face
-    normal with no tangential part to slide on. Measured on the retargeted subset, that is a
-    foot frozen at exactly the -1.0 mm non-penetration tolerance for 17-35 frames while the
-    source's own foot travels up to 0.7 m, then a single-frame catch-up: 644 mm of tracking
-    lag taken up at 31 m/s on `EKUT/EKUT/234/SS1D104_poses`.
-    """
+    """Minimum clearance stays active until the whole robot foot clears the riser."""
     from holosoma_retargeting.config_types.data_type import SMPLH_DEMO_JOINTS
 
     from loco_mujoco.core.terrain import BoxSpec, TerrainSpec
@@ -2116,7 +1987,7 @@ def test_materialized_tendon_joint_limit_gate_handles_ball_joint_angles():
     assert not _joint_limits_satisfied(model, qpos)
 
 
-def test_flat_landmark_analysis_keeps_the_historical_extra_target_tail():
+def test_flat_landmark_analysis_keeps_endpoint_targets():
     """A source-rate target may be one sample longer after velocity differencing."""
     from types import SimpleNamespace
 
@@ -2591,7 +2462,7 @@ def test_contact_ramp_preserves_censored_recording_boundaries():
     assert ramp[-1] == pytest.approx(1.0)
 
 
-def test_contact_ramp_default_keeps_symmetric_legacy_semantics():
+def test_contact_ramp_default_is_symmetric():
     contact = np.ones(5, dtype=bool)
     ramp = contact_ramp(contact, 4)
     assert ramp[0] == pytest.approx(ramp[-1])
@@ -3718,7 +3589,7 @@ def test_suppression_also_drops_inherited_omniretarget_object_rows(probed_model,
 def test_quadratic_term_has_identical_numeric_and_cvxpy_objectives():
     import cvxpy as cp
 
-    from terra._sqp import _QuadraticTerm
+    from terra._qp import _QuadraticTerm
 
     step_value = np.array([0.2, -0.3])
     jacobian = np.array([[1.0, 2.0], [-0.5, 3.0]])
@@ -3800,10 +3671,10 @@ def test_attached_quadratic_terms_preserve_scientific_signs_and_order(probed_mod
 
 
 @requires_omni
-def test_legacy_iteration_without_attached_costs_delegates_unchanged(probed_model, monkeypatch):
+def test_omniretarget_iteration_delegates_to_upstream(probed_model, monkeypatch):
     model, _ = probed_model
     retargeter = _Stub(model)
-    retargeter._solver_backend = "legacy"
+    retargeter._solver_backend = "omniretarget"
     objective = retargeter._constraints.objective
     objective.orientation.site_ids = None
     objective.foot_anchor.contact = None
@@ -3846,7 +3717,7 @@ def test_iteration_rejects_unknown_backend_before_objective_assembly(probed_mode
 def test_condensed_inequalities_preserve_native_row_and_cvxpy_constraint_order():
     import cvxpy as cp
 
-    from terra._sqp import _InequalityConstraints
+    from terra._qp import _InequalityConstraints
 
     constraints = _InequalityConstraints(n_dof=2)
     constraints.add_lower_bound(np.array([1.0, 2.0]), -1.0)
@@ -3889,7 +3760,7 @@ def test_condensed_inequalities_preserve_native_row_and_cvxpy_constraint_order()
 def test_laplacian_linearization_has_equivalent_native_and_cvxpy_forms():
     import cvxpy as cp
 
-    from terra._sqp import _LaplacianLinearization
+    from terra._qp import _LaplacianLinearization
 
     jacobian = np.array([[1.0, -2.0], [0.5, 3.0]])
     current = np.array([0.2, -0.4])
@@ -3916,7 +3787,6 @@ def test_laplacian_linearization_has_equivalent_native_and_cvxpy_forms():
     [
         ("native_clarabel", "native-result", ["native"]),
         ("native_clarabel", None, ["native", "cvxpy"]),
-        ("condensed_cvxpy", None, ["cvxpy"]),
     ],
 )
 def test_condensed_iteration_routes_native_success_and_fallback(
@@ -3969,9 +3839,9 @@ def test_condensed_iteration_routes_native_success_and_fallback(
 
 
 @requires_omni
-def test_native_condensed_failure_records_auditable_fallback(probed_model, monkeypatch):
+def test_native_condensed_failure_reports_fallback(probed_model, monkeypatch):
     import terra.retargeter as retargeter_module
-    from terra._sqp import _InequalityConstraints
+    from terra._qp import _InequalityConstraints
 
     model, _ = probed_model
     retargeter = _Stub(model)

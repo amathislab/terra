@@ -83,7 +83,7 @@ def atomic_write(path: Path, writer: Callable[[Path], object]) -> None:
     """Replace one file only after ``writer`` completes successfully."""
 
     with staged_write(path, writer) as temporary_path:
-        commit_staged_files(((path, temporary_path),))
+        temporary_path.replace(path)
 
 
 __all__ = ["atomic_write", "commit_staged_files", "staged_write"]

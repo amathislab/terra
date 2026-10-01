@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass, field, fields, replace
-from types import MappingProxyType
+from enum import Enum
 from typing import Any, Literal
 
 from terra.constants import (
@@ -68,16 +68,19 @@ from terra.defaults import (
 )
 
 MethodProfile = Literal["terra", "omniretarget"]
-SolverBackend = Literal["legacy", "condensed_cvxpy", "native_clarabel"]
+SolverBackend = Literal["omniretarget", "native_clarabel"]
+
+
+class _SceneDefault(Enum):
+    VALUE = "scene_default"
 
 
 @dataclass(frozen=True, slots=True)
-class SolverConfig(Mapping[str, object]):
+class SolverConfig:
     """Complete, validated input record for one retargeting solve.
 
-    The public API still accepts a flat mapping so existing JSON configuration files
-    remain valid. Once resolved, every accepted key has a named field and unknown
-    keys raise an error. Conditional defaults are materialized by :meth:`for_scene`
+    The public API accepts a flat mapping. Once resolved, every accepted key has
+    a named field, and unknown keys raise an error. Conditional defaults are materialized by :meth:`for_scene`
     before a :class:`terra.assembly.SolveContext` is created.
     """
 
@@ -113,7 +116,7 @@ class SolverConfig(Mapping[str, object]):
     trunk_smooth_weight: float = DEFAULT_TRUNK_SMOOTH_WEIGHT
     trunk_q_diag: float = DEFAULT_TRUNK_Q_DIAG
     axial_smooth_weight: float = DEFAULT_AXIAL_SMOOTH_WEIGHT
-    mtp_smooth_weight: float | None = None
+    mtp_smooth_weight: float | _SceneDefault | None = _SceneDefault.VALUE
     max_root_step: float = DEFAULT_MAX_ROOT_STEP
     max_root_source_deviation: float = DEFAULT_MAX_ROOT_SOURCE_DEVIATION
 
@@ -193,13 +196,11 @@ class SolverConfig(Mapping[str, object]):
     posthoc_tracking_mean_regression: float = DEFAULT_POSTHOC_TRACKING_MEAN_REGRESSION
     posthoc_tracking_max_regression: float = DEFAULT_POSTHOC_TRACKING_MAX_REGRESSION
 
-    _explicit_keys: frozenset[str] = field(default_factory=frozenset, repr=False, compare=False)
-
     def __post_init__(self) -> None:
-        """Validate controlling modes and freeze mapping-valued fields."""
+        """Validate controlling modes and copy mutable input mappings."""
         modes = {
             "method_profile": (self.method_profile, {"terra", "omniretarget"}),
-            "solver_backend": (self.solver_backend, {"legacy", "condensed_cvxpy", "native_clarabel"}),
+            "solver_backend": (self.solver_backend, {"omniretarget", "native_clarabel"}),
             "foot_mode": (self.foot_mode, {"anchored", "omniretarget", "off"}),
             "nonpen_mode": (self.nonpen_mode, {"scene", "off"}),
             "selfpen_mode": (self.selfpen_mode, {"legs", "off"}),
@@ -216,23 +217,8 @@ class SolverConfig(Mapping[str, object]):
             if value not in accepted:
                 raise ValueError(f"{name} must be one of {sorted(accepted)}, got {value!r}")
         for name, (value, accepted) in optional_modes.items():
-            if name in self._explicit_keys and value is None:
-                raise ValueError(f"{name} may not be null when explicitly configured")
             if value is not None and value not in accepted:
                 raise ValueError(f"{name} must be one of {sorted(accepted)}, got {value!r}")
-        for name in (
-            "calibrate_sites",
-            "penetration_tolerance",
-            "foot_orient_weight",
-            "upper_orient_weight",
-            "selfpen_weight",
-            "foot_planted_speed",
-            "ground_range",
-            "ground_size",
-            "stance_height_release_ramp_frames",
-        ):
-            if name in self._explicit_keys and getattr(self, name) is None:
-                raise ValueError(f"{name} may not be null when explicitly configured")
         for name in (
             "source_sole_offsets",
             "extra_landmarks",
@@ -240,8 +226,8 @@ class SolverConfig(Mapping[str, object]):
             "foot_links",
         ):
             value = getattr(self, name)
-            if value is not None and not isinstance(value, MappingProxyType):
-                object.__setattr__(self, name, MappingProxyType(dict(value)))
+            if value is not None:
+                object.__setattr__(self, name, dict(value))
 
     @classmethod
     def field_names(cls) -> frozenset[str]:
@@ -257,29 +243,15 @@ class SolverConfig(Mapping[str, object]):
             raise ValueError("method_profile must be 'terra' or 'omniretarget'")
         return resolve_solver_config(profile, raw)
 
-    @classmethod
-    def _from_resolved(
-        cls,
-        resolved: Mapping[str, object],
-        *,
-        explicit_keys: frozenset[str],
-    ) -> SolverConfig:
-        unknown = sorted(set(resolved) - cls.field_names())
-        if unknown:
-            names = ", ".join(repr(name) for name in unknown)
-            raise ValueError(f"unknown TERRA solver configuration key(s): {names}")
-        return cls(**dict(resolved), _explicit_keys=explicit_keys)  # type: ignore[arg-type]
-
     def for_source_calibration(self, *, calibrate_sites: bool, version: str) -> SolverConfig:
         """Materialize source-landmark calibration choices."""
         return replace(self, calibrate_sites=bool(calibrate_sites), site_calibration_version=str(version))
 
     def for_scene(self, *, on_terrain: bool) -> SolverConfig:
         """Materialize every terrain-dependent default before solver assembly."""
-        explicit = self._explicit_keys
 
-        def selected(name: str, current: Any, default: Any) -> Any:
-            return current if name in explicit else default
+        def selected(current: Any, default: Any) -> Any:
+            return default if current is None or current is _SceneDefault.VALUE else current
 
         orient_default = (
             0.0
@@ -293,27 +265,22 @@ class SolverConfig(Mapping[str, object]):
         return replace(
             self,
             penetration_tolerance=selected(
-                "penetration_tolerance",
                 self.penetration_tolerance,
                 DEFAULT_TERRAIN_PENETRATION_TOLERANCE if on_terrain else 1e-3,
             ),
-            mtp_smooth_weight=selected(
-                "mtp_smooth_weight",
-                self.mtp_smooth_weight,
-                DEFAULT_MTP_SMOOTH_WEIGHT if on_terrain else None,
-            ),
-            foot_orient_weight=selected("foot_orient_weight", self.foot_orient_weight, orient_default),
+            mtp_smooth_weight=(DEFAULT_MTP_SMOOTH_WEIGHT if on_terrain else None)
+            if self.mtp_smooth_weight is _SceneDefault.VALUE
+            else self.mtp_smooth_weight,
+            foot_orient_weight=selected(self.foot_orient_weight, orient_default),
             selfpen_weight=selected(
-                "selfpen_weight",
                 self.selfpen_weight,
                 DEFAULT_SELF_COLLISION_WEIGHT if on_terrain else DEFAULT_FLAT_SELF_COLLISION_WEIGHT,
             ),
-            sole_offset_mode=selected("sole_offset_mode", self.sole_offset_mode, "on" if on_terrain else "off"),
-            clearance_mode=selected("clearance_mode", self.clearance_mode, "source" if on_terrain else "off"),
-            ground_range=selected("ground_range", self.ground_range, ground_range_default),
-            ground_size=selected("ground_size", self.ground_size, ground_size_default),
+            sole_offset_mode=selected(self.sole_offset_mode, "on" if on_terrain else "off"),
+            clearance_mode=selected(self.clearance_mode, "source" if on_terrain else "off"),
+            ground_range=selected(self.ground_range, ground_range_default),
+            ground_size=selected(self.ground_size, ground_size_default),
             stance_height_release_ramp_frames=selected(
-                "stance_height_release_ramp_frames",
                 self.stance_height_release_ramp_frames,
                 self.stance_height_ramp_frames,
             ),
@@ -324,88 +291,71 @@ class SolverConfig(Mapping[str, object]):
         resolved = {}
         for name in self.field_names():
             value = getattr(self, name)
-            resolved[name] = dict(value) if isinstance(value, Mapping) else value
+            resolved[name] = (
+                None if value is _SceneDefault.VALUE else dict(value) if isinstance(value, Mapping) else value
+            )
         return resolved
 
-    def __getitem__(self, key: str) -> object:
-        if key not in self.field_names():
-            raise KeyError(key)
-        return getattr(self, key)
 
-    def __iter__(self) -> Iterator[str]:
-        return iter(sorted(self.field_names()))
+# Terrain defaults; scene resolution supplies flat-scene values where needed.
+TERRA_TERRAIN_DEFAULTS: Mapping[str, object] = {
+    "smooth_weight": 0.2,
+    "trunk_smooth_weight": 2.0,
+    "trunk_q_diag": 0.001,
+    "axial_smooth_weight": 10.0,
+    "mtp_smooth_weight": 10.0,
+    "orient_weight": 0.5,
+    "foot_orient_mode": "off",
+    "foot_orient_weight": 0.0,
+    "upper_orient_weight": 0.0,
+    "torso_frame_mode": "off",
+    "torso_orient_weight": 0.0,
+    "coupler_weight": 0.0,
+    "nonpen_mode": "scene",
+    "penetration_tolerance": 0.0009,
+    "nonpen_max_recovery": 0.01,
+    "selfpen_mode": "legs",
+    "selfpen_tolerance": 0.002,
+    "selfpen_weight": 20000.0,
+    "selfpen_max_recovery_per_iter": 0.002,
+    "foot_mode": "anchored",
+    "sole_offset_mode": "on",
+    "foot_anchor_weight": 100.0,
+    "foot_velocity_weight": 150.0,
+    "foot_velocity_tracking_weight": 200.0,
+    "foot_velocity_limit": 0.25,
+    "stance_height_weight": 400.0,
+    "stance_height_probe_mode": "all",
+    "stance_height_probe_tolerance_m": 0.015,
+    "stance_height_max_recovery_per_iter": 0.004,
+    "clearance_mode": "source",
+    "clearance_fraction": 0.7,
+    "clearance_cap": 0.15,
+    "clearance_lookahead": 0.12,
+    "min_swing_clearance": 0.0,
+    "clearance_weight": 1500.0,
+    "clearance_max_recovery_per_iter": 0.01,
+    "swing_target_lift": 0.06,
+    "swing_target_weight": 1500.0,
+    "swing_target_max_recovery_per_iter": 0.004,
+    "seat_contact_mode": "glute_distance",
+    "seat_contact_weight": 2000.0,
+}
 
-    def __len__(self) -> int:
-        return len(self.field_names())
-
-
-# Definitive global profile selected by the v2 residual-weight search.
-# Scene resolution
-# still substitutes the documented flat-scene values for fields whose meaning is
-# terrain-dependent (for example clearance mode and self-collision weight).
-FROZEN_TERRA_PROFILE_NAME = "v2-p02"
-FROZEN_TERRA_TERRAIN_PROFILE: Mapping[str, object] = MappingProxyType(
-    {
-        "smooth_weight": 0.2,
-        "trunk_smooth_weight": 2.0,
-        "trunk_q_diag": 0.001,
-        "axial_smooth_weight": 10.0,
-        "mtp_smooth_weight": 10.0,
-        "orient_weight": 0.5,
-        "foot_orient_mode": "off",
-        "foot_orient_weight": 0.0,
-        "upper_orient_weight": 0.0,
-        "torso_frame_mode": "off",
-        "torso_orient_weight": 0.0,
-        "coupler_weight": 0.0,
-        "nonpen_mode": "scene",
-        "penetration_tolerance": 0.0009,
-        "nonpen_max_recovery": 0.01,
-        "selfpen_mode": "legs",
-        "selfpen_tolerance": 0.002,
-        "selfpen_weight": 20000.0,
-        "selfpen_max_recovery_per_iter": 0.002,
-        "foot_mode": "anchored",
-        "sole_offset_mode": "on",
-        "foot_anchor_weight": 100.0,
-        "foot_velocity_weight": 150.0,
-        "foot_velocity_tracking_weight": 200.0,
-        "foot_velocity_limit": 0.25,
-        "stance_height_weight": 400.0,
-        "stance_height_probe_mode": "all",
-        "stance_height_probe_tolerance_m": 0.015,
-        "stance_height_max_recovery_per_iter": 0.004,
-        "clearance_mode": "source",
-        "clearance_fraction": 0.7,
-        "clearance_cap": 0.15,
-        "clearance_lookahead": 0.12,
-        "min_swing_clearance": 0.0,
-        "clearance_weight": 1500.0,
-        "clearance_max_recovery_per_iter": 0.01,
-        "swing_target_lift": 0.06,
-        "swing_target_weight": 1500.0,
-        "swing_target_max_recovery_per_iter": 0.004,
-        "seat_contact_mode": "glute_distance",
-        "seat_contact_weight": 2000.0,
-    }
-)
-
-_SCENE_CONDITIONAL_PROFILE_KEYS = frozenset(
-    {
-        "clearance_mode",
-        "foot_orient_weight",
-        "mtp_smooth_weight",
-        "penetration_tolerance",
-        "selfpen_weight",
-        "sole_offset_mode",
-    }
-)
-TERRA_PROFILE_DEFAULTS: Mapping[str, object] = MappingProxyType(
-    {key: value for key, value in FROZEN_TERRA_TERRAIN_PROFILE.items() if key not in _SCENE_CONDITIONAL_PROFILE_KEYS}
-)
+_SCENE_CONDITIONAL_PROFILE_KEYS = {
+    "clearance_mode",
+    "foot_orient_weight",
+    "mtp_smooth_weight",
+    "penetration_tolerance",
+    "selfpen_weight",
+    "sole_offset_mode",
+}
+TERRA_PROFILE_DEFAULTS: Mapping[str, object] = {
+    key: value for key, value in TERRA_TERRAIN_DEFAULTS.items() if key not in _SCENE_CONDITIONAL_PROFILE_KEYS
+}
 
 OMNIRETARGET_PROFILE = {
-    "solver_backend": "legacy",
+    "solver_backend": "omniretarget",
     "use_fitted_shape": True,
     "calibrate_sites": True,
     "activate_obj_non_penetration": True,
@@ -510,16 +460,29 @@ def resolve_solver_config(profile: str | None, config: Mapping[str, object] | No
     """Resolve and validate a public mapping as a typed solver record."""
     raw = dict(config or {})
     resolved = resolve_method_profile(profile, raw)
-    explicit = frozenset(raw) | ({"method_profile"} if profile is not None else set())
-    if (profile or "terra") == "omniretarget":
-        explicit |= frozenset(OMNIRETARGET_PROFILE)
-    return SolverConfig._from_resolved(resolved, explicit_keys=frozenset(explicit))
+    for name in (
+        "calibrate_sites",
+        "penetration_tolerance",
+        "foot_orient_weight",
+        "upper_orient_weight",
+        "selfpen_weight",
+        "foot_planted_speed",
+        "ground_range",
+        "ground_size",
+        "stance_height_release_ramp_frames",
+        "sole_offset_mode",
+        "clearance_mode",
+    ):
+        if name in resolved and resolved[name] is None:
+            raise ValueError(f"{name} may not be null when explicitly configured")
+    return SolverConfig(**resolved)
 
 
 def _value(config: Mapping[str, object] | SolverConfig, key: str, default: object) -> object:
     """Read a profile-inspection value from either public or typed configuration."""
     if isinstance(config, SolverConfig):
-        return getattr(config, key, default)
+        value = getattr(config, key, default)
+        return None if value is _SceneDefault.VALUE else value
     return config.get(key, default)
 
 
@@ -579,12 +542,11 @@ def all_active_qp_terms(config: Mapping[str, object] | SolverConfig, *, on_terra
 
 
 __all__ = [
-    "FROZEN_TERRA_PROFILE_NAME",
-    "FROZEN_TERRA_TERRAIN_PROFILE",
     "MATCHED_TERRA_CORE_OVERRIDES",
     "OMNIRETARGET_PROFILE",
     "TERRA_PROFILE_DEFAULTS",
     "TERRA_SPECIFIC_CONTROLS",
+    "TERRA_TERRAIN_DEFAULTS",
     "MethodProfile",
     "SolverBackend",
     "SolverConfig",

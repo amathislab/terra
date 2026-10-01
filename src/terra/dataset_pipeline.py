@@ -735,7 +735,7 @@ def run_motion(
     """Process one selected archive and report its published artifacts.
 
     TERRA fits terrain from the motion or consumes a declared precomputed
-    reconstruction; comparison methods use the authoritative TERRA terrain.
+    reconstruction; comparison methods use the TERRA terrain.
     A successful run publishes the trajectory and analysis under
     ``config.cache_root`` and a detailed terrain report under
     ``config.run_root/terrain``. The returned status mapping includes motion
@@ -836,7 +836,7 @@ def run_motion(
             if terra_artifacts.terrain_path is None:
                 if config.terrain_mode != "flat":
                     raise FileNotFoundError(
-                        f"authoritative TERRA terrain is missing for non-flat motion {record.motion}"
+                        f"TERRA terrain is missing for non-flat motion {record.motion}"
                     )
                 terrain = None
                 terrain_input = None
@@ -844,7 +844,7 @@ def run_motion(
                     "model": "flat",
                     "dataset_config": config.name,
                     "terrain_source_path": None,
-                    "terrain_source": "authoritative_terra_implicit_flat_scene",
+                    "terrain_source": "terra_flat_scene",
                 }
             else:
                 terrain = TerrainMetadata.load(terra_artifacts.terrain_path).terrain
@@ -854,7 +854,7 @@ def run_motion(
                     "dataset_config": config.name,
                     "terrain_source_path": str(terra_artifacts.terrain_path),
                 }
-            validation = {"passed": None, "source": "authoritative_terra_metadata"}
+            validation = {"passed": None, "source": "terra_metadata"}
         offsets = {}
         overrides = dict(config.method_overrides)
     retarget_started = time.perf_counter()

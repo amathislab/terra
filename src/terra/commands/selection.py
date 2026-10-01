@@ -14,7 +14,7 @@ from terra._revision import write_git_commit
 from terra.artifacts import validate_retarget_artifacts
 from terra.commands.run import read_motion_selection
 from terra.paths import StorageRoots
-from terra.training_split import assign_training_splits, split_audit
+from terra.training_split import assign_training_splits, split_summary
 
 SELECTION_FIELDS = (
     "motion",
@@ -257,7 +257,7 @@ def publish_selection(
     rows: list[dict[str, str]],
     *,
     overwrite: bool = False,
-    audit_path: Path | None = None,
+    report_path: Path | None = None,
 ) -> dict[str, object]:
     """Publish the ordered training-selection CSV."""
     destination = path.expanduser().resolve()
@@ -265,27 +265,27 @@ def publish_selection(
         raise ValueError("training selection output must use a .csv extension")
     if destination.exists() and not overwrite:
         raise FileExistsError(f"training selection output already exists: {destination}")
-    audit = split_audit(rows)
+    report = split_summary(rows)
     payload: dict[str, object] = {
         "selection": str(destination),
         "motions": [row["motion"] for row in rows],
-        "split_audit": audit,
+        "split_summary": report,
     }
-    resolved_audit = None if audit_path is None else audit_path.expanduser().resolve()
-    if resolved_audit is not None:
-        if resolved_audit.suffix.casefold() != ".json":
-            raise ValueError("training selection audit output must use a .json extension")
-        if resolved_audit == destination:
-            raise ValueError("training selection and audit outputs must differ")
-        if resolved_audit.exists() and not overwrite:
-            raise FileExistsError(f"training selection audit already exists: {resolved_audit}")
-        payload["audit"] = str(resolved_audit)
+    resolved_report = None if report_path is None else report_path.expanduser().resolve()
+    if resolved_report is not None:
+        if resolved_report.suffix.casefold() != ".json":
+            raise ValueError("training selection report output must use a .json extension")
+        if resolved_report == destination:
+            raise ValueError("training selection and report outputs must differ")
+        if resolved_report.exists() and not overwrite:
+            raise FileExistsError(f"training selection report already exists: {resolved_report}")
+        payload["report"] = str(resolved_report)
 
     atomic_write(destination, lambda temporary: _write_csv(temporary, rows))
-    if resolved_audit is not None:
+    if resolved_report is not None:
         rendered = json.dumps(payload, indent=2) + "\n"
         atomic_write(
-            resolved_audit,
+            resolved_report,
             lambda temporary: temporary.write_text(rendered, encoding="utf-8"),
         )
     write_git_commit(destination.parent)
@@ -330,9 +330,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument(
-        "--audit-out",
+        "--report-out",
         type=Path,
-        help="optional JSON path for the complete cohort and split audit",
+        help="optional JSON path for the complete cohort and split summary",
     )
     parser.add_argument(
         "--terrain-mode",
@@ -405,12 +405,12 @@ def main(argv: list[str] | None = None) -> int:
             )
         output = roots.resolve_artifact(args.out, base=Path.cwd())
         assert output is not None
-        audit_output = roots.resolve_artifact(args.audit_out, base=Path.cwd())
+        report_output = roots.resolve_artifact(args.report_out, base=Path.cwd())
         payload = publish_selection(
             output,
             rows,
             overwrite=args.overwrite,
-            audit_path=audit_output,
+            report_path=report_output,
         )
     except (FileExistsError, FileNotFoundError, OSError, TypeError, ValueError) as error:
         parser.error(str(error))

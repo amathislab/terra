@@ -1,4 +1,4 @@
-"""Tests for the package-owned reconstruction registry and cohort contract."""
+"""Tests for the bundled reconstruction registry and cohort contract."""
 
 from __future__ import annotations
 
@@ -11,10 +11,7 @@ from typing import Any
 import pytest
 
 from terra.benchmarking.reconstruction import (
-    RECONSTRUCTION_METHODS,
-    available_methods,
     cli,
-    create_method,
     run_cohort,
 )
 from terra.benchmarking.reconstruction.core import (
@@ -60,22 +57,6 @@ class FakeMethod:
 
     def summarize(self, result):
         return {"value": result.fit["value"]}
-
-
-def test_registry_is_the_complete_supported_method_inventory():
-    assert available_methods() == ("terra",)
-    with pytest.raises(ValueError, match="unknown reconstruction method"):
-        create_method("unknown", motions=("Study/A",))
-
-
-def test_registry_labels_terra():
-    assert RECONSTRUCTION_METHODS["terra"].display_name == "TERRA"
-
-
-def test_cohort_cli_accepts_a_long_inline_options_object():
-    payload = '{"config":{"max_merge_candidate_pairs":100000000},"padding":"' + "x" * 300 + '"}'
-
-    assert cli._json_object(payload)["config"]["max_merge_candidate_pairs"] == 100_000_000
 
 
 def test_selection_requires_unique_canonical_collision_free_motion_ids(tmp_path):
@@ -170,7 +151,7 @@ def test_rerun_recomputes_output_and_failed_fit_preserves_existing_record(tmp_pa
     assert json.loads((output / "run.json").read_text())["options"] == {"value": 2}
 
 
-def test_cohort_cli_forwards_registered_method_inputs(monkeypatch, tmp_path):
+def test_cohort_cli_forwards_dataset_and_selection(monkeypatch, tmp_path):
     selection = _selection(tmp_path / "selection.csv", "Study/A")
     calls = []
 
@@ -178,7 +159,7 @@ def test_cohort_cli_forwards_registered_method_inputs(monkeypatch, tmp_path):
         calls.append((args, kwargs))
         return 17
 
-    monkeypatch.setattr(cli, "run_registered", run)
+    monkeypatch.setattr(cli, "run_terrain_cohort", run)
     assert (
         cli.cohort_main(
             [
@@ -194,4 +175,5 @@ def test_cohort_cli_forwards_registered_method_inputs(monkeypatch, tmp_path):
         )
         == 17
     )
-    assert calls[0][0][0] == "terra"
+    assert calls[0][0] == (selection, tmp_path / "terra")
+    assert calls[0][1] == {"dataset_config": tmp_path / "dataset.toml"}

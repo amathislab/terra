@@ -113,7 +113,7 @@ class _TerraReferenceVisualMixin:
 
 
 class TerraGoalVisual(CompactTerraGoalMixin, _TerraReferenceVisualMixin, GoalTrajMimicv2):
-    """Render the compact legacy TERRA goal on its paired terrain."""
+    """Render the compact TERRA goal on its paired terrain."""
 
     def __init__(self, info_props: dict, rel_body_names: list[str] | None = None, **parameters: Any):
         self._configure_future_reference(parameters)

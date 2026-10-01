@@ -203,17 +203,16 @@ def validation_lane_count(
     max_parallel_rollouts: int = DEFAULT_MAX_PARALLEL_ROLLOUTS,
     allocation_quantum: int = 32,
 ) -> int:
-    """Return a bounded, padded lane pool for chunked exhaustive validation."""
+    """Pad the requested lane pool and cap to the GPU allocation quantum."""
     if rollout_count < 1:
         raise ValueError("rollout_count must be positive")
     if allocation_quantum < 1:
         raise ValueError("allocation_quantum must be positive")
-    if max_parallel_rollouts < allocation_quantum:
-        raise ValueError("max_parallel_rollouts must be at least the allocation quantum")
-    if max_parallel_rollouts % allocation_quantum:
-        raise ValueError("max_parallel_rollouts must be divisible by the allocation quantum")
+    if max_parallel_rollouts < 1:
+        raise ValueError("max_parallel_rollouts must be positive")
     padded_rollouts = ((rollout_count + allocation_quantum - 1) // allocation_quantum) * allocation_quantum
-    return min(padded_rollouts, max_parallel_rollouts)
+    padded_cap = ((max_parallel_rollouts + allocation_quantum - 1) // allocation_quantum) * allocation_quantum
+    return min(padded_rollouts, padded_cap)
 
 
 def _rollout_settings(validation: Any, motion_count: int) -> tuple[int, int, int]:

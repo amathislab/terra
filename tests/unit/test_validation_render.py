@@ -2,13 +2,11 @@ import argparse
 
 import numpy as np
 import pytest
-from omegaconf import OmegaConf
 
 from terra.rl.validation_render import (
     _checkpoint_observation_dimension,
     _checkpoint_timestep,
     _parse_motion,
-    _upgrade_legacy_observation_config,
 )
 
 
@@ -27,26 +25,6 @@ def test_checkpoint_timestep_supports_metadata_objects_and_mappings():
 
     assert _checkpoint_timestep(Metadata()) == 123
     assert _checkpoint_timestep({"global_timestep": 456}) == 456
-
-
-def test_legacy_future_reference_checkpoint_config_is_upgraded():
-    config = OmegaConf.create(
-        {
-            "experiment": {
-                "env_params": {
-                    "goal_params": {
-                        "future_reference_stride": 10,
-                        "future_reference_horizon": 100,
-                    }
-                }
-            }
-        }
-    )
-    OmegaConf.set_struct(config, False)
-
-    assert _upgrade_legacy_observation_config(config)
-    assert config.experiment.env_params.goal_params.enable_future_reference_observations is True
-    assert not _upgrade_legacy_observation_config(config)
 
 
 def test_checkpoint_observation_dimension_reads_ppo_running_statistics():

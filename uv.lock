@@ -1263,7 +1263,7 @@ wheels = [
 [[package]]
 name = "holosoma-retargeting"
 version = "0.1.0"
-source = { git = "https://github.com/merc-s/holosoma.git?subdirectory=src%2Fholosoma_retargeting&rev=12022b5ca5e12e460156c2d91a908f80f6c63fa1#12022b5ca5e12e460156c2d91a908f80f6c63fa1" }
+source = { git = "https://github.com/amazon-far/holosoma.git?subdirectory=src%2Fholosoma_retargeting&rev=12022b5ca5e12e460156c2d91a908f80f6c63fa1#12022b5ca5e12e460156c2d91a908f80f6c63fa1" }
 dependencies = [
     { name = "cvxpy" },
     { name = "jinja2" },
@@ -4180,7 +4180,7 @@ requires-dist = [
     { name = "ezc3d", marker = "extra == 'c3d'" },
     { name = "ezc3d", marker = "extra == 'dev'" },
     { name = "general-motion-retargeting", marker = "extra == 'baselines'", git = "https://github.com/amathislab/gmr_plus.git?rev=7c3e77bca3d086326a0f2ca6df52afdf2cb469be" },
-    { name = "holosoma-retargeting", git = "https://github.com/merc-s/holosoma.git?subdirectory=src%2Fholosoma_retargeting&rev=12022b5ca5e12e460156c2d91a908f80f6c63fa1" },
+    { name = "holosoma-retargeting", git = "https://github.com/amazon-far/holosoma.git?subdirectory=src%2Fholosoma_retargeting&rev=12022b5ca5e12e460156c2d91a908f80f6c63fa1" },
     { name = "jax", extras = ["cuda12"], marker = "platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'cuda'", specifier = "==0.10.2" },
     { name = "joblib" },
     { name = "musclemimic", git = "https://github.com/amathislab/musclemimic.git?rev=f1c2dbfd0d8e31d306b2c4e2369aecdc7bc21993" },

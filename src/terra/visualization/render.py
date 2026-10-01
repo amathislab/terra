@@ -53,7 +53,7 @@ def trajectory_paths(
     *,
     cache_root: str | Path,
 ) -> tuple[Path, Path]:
-    """Return package-owned trajectory and terrain paths for one artifact set."""
+    """Return bundled trajectory and terrain paths for one artifact set."""
 
     from terra.artifacts import normalize_motion_name
 

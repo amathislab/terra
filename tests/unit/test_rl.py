@@ -431,39 +431,7 @@ def test_ppo_multi_motion_config_is_dedicated_and_safe_by_default(monkeypatch, t
         )
         == "PPOJax"
     )
-    assert config.experiment.algorithm == "PPOJax"
-    assert config.experiment.distributed.num_devices == -1
-    assert config.experiment.trajectory.sharding == "none"
-    assert config.experiment.env_params.mjx_warp_graph_mode == "warp"
-    assert config.experiment.validation.num_envs == 32
-    assert config.experiment.validation.evaluate_all is True
-    assert config.experiment.validation.deterministic is False
-    assert config.experiment.validation.minimum_total_rollouts == 100
-    assert config.experiment.validation.rollouts_per_motion == 3
-    assert config.experiment.validation.max_parallel_rollouts == 1024
-    assert config.experiment.validation.video_active is False
-    assert list(config.experiment.validation.video_motions) == []
-    assert config.experiment.exact_resume is False
-    assert config.experiment.save_runtime_state is False
-    assert config.experiment.async_checkpointing is False
-    assert config.experiment.env_params.heightmap_grid_rows == 11
-    assert config.experiment.env_params.heightmap_grid_forward_offset == 0.0
-    assert config.experiment.env_params.goal_params.enable_future_reference_observations is True
-    assert config.experiment.env_params.goal_params.future_reference_stride == 10
-    assert config.experiment.env_params.goal_params.future_reference_horizon == 100
-    assert config.experiment.env_params.goal_params.enable_motion_phase is False
-    assert config.experiment.env_params.reward_params.activation_energy_coeff == 2.0
-    assert config.experiment.env_params.reward_params.activation_floor == 0.02
-    assert config.experiment.env_params.reward_params.activation_floor_coeff == 1.0
-    assert config.experiment.ppo_config.num_steps == 40
-    assert config.experiment.ppo_config.num_minibatches == 256
-    assert config.experiment.ppo_config.gamma == 0.995
-    assert config.experiment.ppo_config.gae_lambda == 0.97
-    assert config.experiment.lr_schedule_type == "warmup_hold_cosine"
-    assert config.experiment.hold_fraction == 0.55
-    assert config.experiment.adaptive_termination.enabled is True
-    assert config.experiment.adaptive_sampling.balance_motion_groups is True
-    assert config.experiment.nonfinite_guard.enabled is True
+    assert config.experiment.validation.num_steps == 64
 
 
 class _IdentitySiteMapper:

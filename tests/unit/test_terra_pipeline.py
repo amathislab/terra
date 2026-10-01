@@ -245,7 +245,7 @@ def test_future_reference_observation_has_height_and_root_relative_ankles_only()
         np.testing.assert_allclose(observation[index * 7 + 1 : index * 7 + 7], expected_ankles)
 
 
-def test_future_reference_observation_can_preserve_legacy_policy_shape():
+def test_future_reference_observation_can_disable_extra_features():
     goal = object.__new__(TerraGoal)
     parameters = {
         "enable_future_reference_observations": False,

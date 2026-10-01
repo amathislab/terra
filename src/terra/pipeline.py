@@ -401,9 +401,9 @@ def _build_retargeter(
         debug=config.debug,
     )
     solver_backend = config.solver_backend
-    if solver_backend not in {"legacy", "condensed_cvxpy", "native_clarabel"}:
+    if solver_backend not in {"omniretarget", "native_clarabel"}:
         raise ValueError(
-            f"solver_backend must be 'legacy', 'condensed_cvxpy', or 'native_clarabel', got {solver_backend!r}"
+            f"solver_backend must be 'omniretarget' or 'native_clarabel', got {solver_backend!r}"
         )
     retargeter._solver_backend = solver_backend
     initial_step_size = float(config.initial_step_size)

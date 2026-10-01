@@ -318,11 +318,11 @@ def test_training_selection_validates_runs_and_preserves_explicit_order(monkeypa
     assert rows[1]["source_cache_root"] == str(gait_cache)
 
     output = tmp_path / "selection.csv"
-    audit_output = tmp_path / "selection_audit.json"
-    payload = publish_selection(output, rows, audit_path=audit_output)
+    report_output = tmp_path / "selection_report.json"
+    payload = publish_selection(output, rows, report_path=report_output)
     assert payload["motions"] == [second, first]
-    assert payload["audit"] == str(audit_output)
-    assert json.loads(audit_output.read_text()) == payload
+    assert payload["report"] == str(report_output)
+    assert json.loads(report_output.read_text()) == payload
     assert len((tmp_path / "GIT_COMMIT").read_text().strip()) == 40
     assert not output.with_suffix(".json").exists()
     with output.open(newline="") as handle:

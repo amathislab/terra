@@ -11,7 +11,7 @@ from pathlib import Path
 from omegaconf import OmegaConf
 
 MOTION_SELECTION_RECORD_ENV = "TERRA_MOTION_SELECTION_RECORD"
-_LEGACY_MOTION_ENV = {
+_MOTION_ENV = {
     "train": "TERRA_MOTIONS",
     "validation": "TERRA_VALIDATION_MOTIONS",
 }
@@ -76,21 +76,21 @@ def motion_selection(role: str, record_value: str = "") -> list[str]:
     """Resolve ordered train or validation motions without placing them in the environment."""
 
     normalized_role = str(role).strip().lower()
-    if normalized_role not in _LEGACY_MOTION_ENV:
+    if normalized_role not in _MOTION_ENV:
         raise ValueError("motion selection role must be 'train' or 'validation'")
     record_value = str(record_value).strip()
     if record_value:
         return _motions_from_record(normalized_role, record_value)
 
-    environment_variable = _LEGACY_MOTION_ENV[normalized_role]
+    environment_variable = _MOTION_ENV[normalized_role]
     encoded = os.environ.get(environment_variable)
     if encoded is None and normalized_role == "validation":
-        environment_variable = _LEGACY_MOTION_ENV["train"]
+        environment_variable = _MOTION_ENV["train"]
         encoded = os.environ.get(environment_variable)
     if encoded is None:
         raise ValueError(
             f"set {MOTION_SELECTION_RECORD_ENV} to a materialization record or "
-            f"set the legacy {environment_variable} variable"
+            f"set {environment_variable}"
         )
     try:
         decoded = json.loads(encoded)

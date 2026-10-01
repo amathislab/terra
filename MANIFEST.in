@@ -1,7 +1,5 @@
 include README.md
 include uv.lock
-include terra_build_backend.py
-include src/terra/_build_commit.txt
 recursive-include scripts *.py
 include scripts/terra/ppo_smoke_overrides.json
 recursive-include docs *.md
@@ -15,5 +13,3 @@ recursive-include src/terra/datasets/configs *.toml
 include src/terra/py.typed
 recursive-include tests *.py
 include .python-version
-include .git_archival.txt
-include .gitattributes

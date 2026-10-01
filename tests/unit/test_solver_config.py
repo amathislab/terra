@@ -1,4 +1,4 @@
-"""Fail-closed contracts for the typed production solver boundary."""
+"""Configuration validation and scene defaults for the solver."""
 
 import logging
 
@@ -23,7 +23,7 @@ from terra.profiles import (
 )
 
 
-def test_unknown_solver_configuration_key_fails_closed():
+def test_unknown_solver_configuration_key_is_rejected():
     with pytest.raises(ValueError, match=r"unknown TERRA solver configuration.*step_szie"):
         resolve_solver_config("terra", {"step_szie": 0.1})
 
@@ -41,7 +41,7 @@ def test_controlling_solver_modes_are_validated_during_resolution(key, value):
         resolve_solver_config("terra", {key: value})
 
 
-def test_scene_resolution_materializes_frozen_profile_defaults():
+def test_scene_resolution_materializes_profile_defaults():
     flat = resolve_solver_config("terra").for_scene(on_terrain=False)
     terrain = resolve_solver_config("terra").for_scene(on_terrain=True)
 
@@ -73,17 +73,17 @@ def test_typed_resolution_preserves_active_term_selection(on_terrain):
         "stance_height_weight": 25.0,
         "selfpen_mode": "off",
     }
-    legacy = resolve_method_profile("terra", overrides)
-    legacy.setdefault("foot_orient_mode", "on")
-    legacy.setdefault("foot_orient_weight", 2.0 if on_terrain else DEFAULT_FLAT_FOOT_ORIENT_WEIGHT)
+    mapping = resolve_method_profile("terra", overrides)
+    mapping.setdefault("foot_orient_mode", "on")
+    mapping.setdefault("foot_orient_weight", 2.0 if on_terrain else DEFAULT_FLAT_FOOT_ORIENT_WEIGHT)
     typed = resolve_solver_config("terra", overrides).for_scene(on_terrain=on_terrain)
 
     assert active_qp_terms(typed, on_terrain=on_terrain) == active_qp_terms(
-        legacy,
+        mapping,
         on_terrain=on_terrain,
     )
     assert all_active_qp_terms(typed, on_terrain=on_terrain) == all_active_qp_terms(
-        legacy,
+        mapping,
         on_terrain=on_terrain,
     )
 
@@ -136,9 +136,9 @@ def test_solve_context_rejects_out_of_order_stage_transition():
         context.advance(SolveStage.PREPARED, SolveStage.SOLVED)
 
 
-def test_public_default_weights_match_the_frozen_terrain_profile():
+def test_public_default_weights_match_terrain_profile():
     from terra import defaults
-    from terra.profiles import FROZEN_TERRA_TERRAIN_PROFILE
+    from terra.profiles import TERRA_TERRAIN_DEFAULTS
 
     pairs = {
         "orient_weight": defaults.DEFAULT_ORIENT_WEIGHT,
@@ -148,4 +148,4 @@ def test_public_default_weights_match_the_frozen_terrain_profile():
         "stance_height_weight": defaults.DEFAULT_STANCE_HEIGHT_WEIGHT,
         "coupler_weight": defaults.DEFAULT_COUPLER_WEIGHT,
     }
-    assert pairs == {key: FROZEN_TERRA_TERRAIN_PROFILE[key] for key in pairs}
+    assert pairs == {key: TERRA_TERRAIN_DEFAULTS[key] for key in pairs}

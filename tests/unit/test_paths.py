@@ -1,4 +1,4 @@
-"""Tests for the package-owned external-storage boundary."""
+"""Tests for the bundled external-storage boundary."""
 
 from __future__ import annotations
 

@@ -99,7 +99,7 @@ _PROFILES = {
         cli_name="no-physical-cues",
         description=(
             "Full TERRA without supported-foot normal or swing-clearance evidence for "
-            "ramp-versus-step selection; the frozen contact-height residual decides."
+            "ramp-versus-step selection; the contact-height residual decides."
         ),
         forced_fit_options=(("family_evidence_mode", FAMILY_EVIDENCE_HEIGHT_ONLY),),
         stages=(

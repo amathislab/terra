@@ -30,7 +30,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Dispatch one package-owned dataset converter without importing the others."""
+    """Dispatch one bundled dataset converter without importing the others."""
 
     arguments = list(sys.argv[1:] if argv is None else argv)
     parser = _parser()

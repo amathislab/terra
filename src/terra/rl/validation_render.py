@@ -61,19 +61,6 @@ def _checkpoint_timestep(metadata) -> int:
     return max(0, int(value or 0))
 
 
-def _upgrade_legacy_observation_config(config) -> bool:
-    """Restore the implicit future-reference contract of pre-guard checkpoints."""
-    goal_params = config.experiment.env_params.get("goal_params", {})
-    if "enable_future_reference_observations" in goal_params:
-        return False
-    if not {"future_reference_stride", "future_reference_horizon"}.issubset(goal_params):
-        return False
-    goal_params["enable_future_reference_observations"] = True
-    print(
-        "[ValidationVideo] Upgraded legacy checkpoint observation config: "
-        "future reference height/ankle cues are enabled."
-    )
-    return True
 
 
 def _checkpoint_observation_dimension(raw_agent_state) -> int | None:
@@ -108,7 +95,6 @@ def _initialize_checkpoint_policy(checkpoint: str, recorder: TerraValidationVide
 
     config, raw_agent_state, metadata = load_checkpoint(checkpoint)
     OmegaConf.set_struct(config, False)
-    _upgrade_legacy_observation_config(config)
     algorithm_cls = pick_algorithm(config)
     register_components()
     install_backend_integrations(str(config.experiment.get("algorithm", algorithm_cls.__name__)))
@@ -167,21 +153,6 @@ def render_checkpoint(
     )
     if not isinstance(paths, dict) or not paths:
         raise RuntimeError("no validation videos were produced")
-    audit_path = Path(video_dir) / "initialization_audit.json"
-    audit_path.write_text(
-        json.dumps(
-            {
-                "checkpoint": checkpoint,
-                "global_timestep": checkpoint_step,
-                "motions": recorder.initialization_audits,
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    print(f"[ValidationVideo] Initialization audit report: {audit_path}")
     return paths, checkpoint_step, config
 
 

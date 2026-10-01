@@ -1,4 +1,4 @@
-"""Audit Gait120 and build TERRA-ready AMASS/SMPL-H trajectories.
+"""Inspect Gait120 and build TERRA-ready AMASS/SMPL-H trajectories.
 
 The original dataset stores up to two TRC gait cycles per locomotion trial and
 one transition per stool trial.  The companion ``Gait120-EMG`` tree stores the
@@ -81,7 +81,7 @@ EXPECTED_EMG_CHANNELS = (
     "PeroneusBrevis",
 )
 GAIT120_EMG_FPS = 2000.0
-AUDIT_VERSION = 1
+REPORT_VERSION = 1
 MARKER_ARCHIVE_VERSION = 1
 
 
@@ -308,7 +308,7 @@ def _load_subject_emg_metadata(emg_path: Path, movements: tuple[str, ...]) -> di
     return output
 
 
-def audit_dataset(
+def inspect_dataset(
     *,
     original_root: Path,
     emg_root: Path,
@@ -325,7 +325,7 @@ def audit_dataset(
         try:
             emg_metadata = _load_subject_emg_metadata(emg_path, movements)
             emg_load_error = ""
-        except Exception as exc:  # keep auditing kinematics when one MAT file is corrupt
+        except Exception as exc:  # keep inspecting kinematics when one MAT file is corrupt
             emg_metadata = {}
             emg_load_error = f"{type(exc).__name__}: {exc}"
 
@@ -446,8 +446,8 @@ def audit_dataset(
             ),
         }
 
-    audit = {
-        "audit_version": AUDIT_VERSION,
+    report = {
+        "report_version": REPORT_VERSION,
         "original_root": str(original_root.resolve()),
         "emg_root": str(emg_root.resolve()),
         "output_root": str(output_root.resolve()),
@@ -474,8 +474,8 @@ def audit_dataset(
     }
     _write_csv(output_root / "steps.csv", [asdict(row) for row in step_records])
     _write_manifest(_progress_manifest(output_root), clips, output_root=output_root)
-    (output_root / "audit.json").write_text(json.dumps(audit, indent=2) + "\n")
-    return step_records, clips, audit
+    (output_root / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+    return step_records, clips, report
 
 
 def _write_csv(path: Path, rows: list[dict]) -> None:
@@ -959,9 +959,7 @@ def _fit_subject(job: dict[str, Any]) -> list[dict[str, Any]]:
     import torch
 
     torch.set_num_threads(job["torch_threads"])
-    from terra.datasets.marker_fitting import require_paper_pose_prior
 
-    require_paper_pose_prior()
     from musclemimic.web_viewer.c3d_to_smpl import fit_smpl_to_c3d, save_motion_data_as_amass_smplh_npz
 
     subject = int(job["subject"])
@@ -1363,7 +1361,7 @@ def _apply_fit_quality(
     biomechanics_validation_failures: list[dict] | None = None,
     marker_fit_quality: dict,
 ) -> list[dict]:
-    """Set the manifest quality gate and return auditable rejection rows."""
+    """Set the manifest quality gate and return inspectable rejection rows."""
 
     reasons: dict[str, list[str]] = defaultdict(list)
     for label, rows in (("smplh_validation", validation_failures),):
@@ -1600,7 +1598,7 @@ def _build_parser(roots: StorageRoots | None = None) -> argparse.ArgumentParser:
         choices=TARGET_MOVEMENTS,
         default=list(TARGET_MOVEMENTS),
     )
-    parser.add_argument("--audit-only", action="store_true")
+    parser.add_argument("--inspect-only", action="store_true")
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--redo", action="store_true", help="Rebuild marker archives and existing SMPL-H files")
     parser.add_argument("--workers", type=int, default=1)
@@ -1691,8 +1689,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise SystemExit("--device cuda requested, but torch.cuda.is_available() is false")
 
     started = time.time()
-    print("Auditing paired Gait120 markers, EMG, and available ground forces...", flush=True)
-    _, clips, audit = audit_dataset(
+    print("Inspecting paired Gait120 markers, EMG, and available ground forces...", flush=True)
+    _, clips, report = inspect_dataset(
         original_root=args.original_root,
         emg_root=args.emg_root,
         output_root=args.output_root,
@@ -1717,11 +1715,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"subject calibrations; selection follows fit validation -> {chair_selection_output}",
             flush=True,
         )
-    print(json.dumps(audit["summary"], indent=2), flush=True)
-    for movement, summary in audit["by_movement"].items():
+    print(json.dumps(report["summary"], indent=2), flush=True)
+    for movement, summary in report["by_movement"].items():
         print(f"{movement}: {summary}", flush=True)
-    if args.audit_only:
-        print(f"Audit complete in {time.time() - started:.1f}s -> {args.output_root / 'audit.json'}")
+    if args.inspect_only:
+        print(f"Inspection complete in {time.time() - started:.1f}s -> {args.output_root / 'report.json'}")
         return 0
 
     print(f"Preparing {len(clips)} paired marker archives...", flush=True)

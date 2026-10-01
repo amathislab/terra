@@ -43,7 +43,7 @@ def test_baseline_configs_are_immutable_and_resolve_by_copy():
     assert GMR_BASELINE.config["damping"] == 0.5
 
 
-def test_gmr_adapter_delegates_with_frozen_defaults(monkeypatch):
+def test_gmr_adapter_delegates_with_default_configuration(monkeypatch):
     captured = {}
 
     def fake_fit(*args):
@@ -132,7 +132,7 @@ def test_smpl_adapter_delegates_to_musclemimic_public_api(monkeypatch):
     assert captured["kwargs"] == {"skip_steps": True, "visualize": True}
 
 
-def test_exact_smpl_rate_resamples_every_joint_and_disables_historical_skip(monkeypatch):
+def test_exact_smpl_rate_resamples_every_joint_without_subsampling(monkeypatch):
     captured = {}
     pose = np.zeros((3, 6), dtype=np.float32)
     pose[-1, 2] = np.pi / 2

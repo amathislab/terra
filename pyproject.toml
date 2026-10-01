@@ -1,7 +1,6 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "terra_build_backend"
-backend-path = ["."]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "terra-retargeting"
@@ -33,7 +32,7 @@ dependencies = [
     "torch==2.13.0",
     "musclemimic @ git+https://github.com/amathislab/musclemimic.git@f1c2dbfd0d8e31d306b2c4e2369aecdc7bc21993",
     "smplx @ git+https://github.com/amathislab/smplx@a5b8e4ac14f79f3f33fd2cf2a16e6f507146b813",
-    "holosoma-retargeting @ git+https://github.com/merc-s/holosoma.git@12022b5ca5e12e460156c2d91a908f80f6c63fa1#subdirectory=src/holosoma_retargeting",
+    "holosoma-retargeting @ git+https://github.com/amazon-far/holosoma.git@12022b5ca5e12e460156c2d91a908f80f6c63fa1#subdirectory=src/holosoma_retargeting",
 ]
 
 [project.optional-dependencies]
@@ -102,7 +101,6 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 terra = [
-    "_build_commit.txt",
     "py.typed",
     "rl/configs/*.yaml",
     "datasets/configs/*.toml",
@@ -111,6 +109,7 @@ terra = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = ["slow: distribution build and installation checks (enable with --runslow)"]
 
 [tool.ruff]
 line-length = 120

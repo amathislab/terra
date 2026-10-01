@@ -11,22 +11,17 @@ import mujoco
 import numpy as np
 from scipy import sparse as sp
 
-from terra._interaction_mesh import _calculate_laplacian_coordinates, _get_adjacency_list
-from terra._qp import _native_clarabel_qp
-from terra._sqp import (
-    _CvxpyShim,
+from terra._qp import (
     _InequalityConstraints,
     _LaplacianLinearization,
-    _objective_with_quadratic_terms,
+    _native_clarabel_qp,
     _QuadraticTerm,
-)
-from terra.baselines.omniretarget import OMNIRETARGET_INSTALLED, InteractionMeshRetargeter
-from terra.retarget_terms import RetargeterConstraintState
-from terra.solver_backend import (
     cvxpy_condensed_objective,
     native_condensed_objective,
     updated_pose,
 )
+from terra.baselines.omniretarget import OMNIRETARGET_INSTALLED, InteractionMeshRetargeter
+from terra.retarget_terms import RetargeterConstraintState
 
 if TYPE_CHECKING:
     from holosoma_retargeting.config_types.retargeter import FootLockConfig, SelfCollisionConfig
@@ -86,7 +81,7 @@ class TerraRetargeter(InteractionMeshRetargeter if OMNIRETARGET_INSTALLED else o
         self._geom_names: list[str] = []
         self._geom_names_model_cache = None
 
-        self._solver_backend = "legacy"
+        self._solver_backend = "native_clarabel"
         self._native_fallback_count = 0
         self._native_fallback_frames: set[int] = set()
         self._native_fallback_reasons: tuple[str, ...] = ()
@@ -323,30 +318,6 @@ class TerraRetargeter(InteractionMeshRetargeter if OMNIRETARGET_INSTALLED else o
             self._laplacian_topology_scope_active = previous_scope
             self._laplacian_scoped_adjacency = previous_adjacency
             self._laplacian_scoped_vertex_count = previous_vertex_count
-
-    def retarget_motion(self, *args, **kwargs):
-        """Retarget a motion with optimized mesh-preparation helpers.
-
-        Args:
-            *args: Positional arguments accepted by the OmniRetarget method.
-            **kwargs: Keyword arguments accepted by the OmniRetarget method.
-
-        Returns:
-            The OmniRetarget motion-retargeting result.
-        """
-        from holosoma_retargeting.src import interaction_mesh_retargeter as _imr
-
-        omniretarget_adjacency = _imr.get_adjacency_list
-        omniretarget_calculate = _imr.calculate_laplacian_coordinates
-        _imr.get_adjacency_list = _get_adjacency_list
-        _imr.calculate_laplacian_coordinates = _calculate_laplacian_coordinates
-        try:
-            return super().retarget_motion(*args, **kwargs)
-        finally:
-            if _imr.calculate_laplacian_coordinates is _calculate_laplacian_coordinates:
-                _imr.calculate_laplacian_coordinates = omniretarget_calculate
-            if _imr.get_adjacency_list is _get_adjacency_list:
-                _imr.get_adjacency_list = omniretarget_adjacency
 
     def attach_environment_geoms(
         self, geom_ids, max_recovery_per_iter: float = 0.01, engage_from_frame: int = 0
@@ -736,26 +707,6 @@ class TerraRetargeter(InteractionMeshRetargeter if OMNIRETARGET_INSTALLED else o
         """Linearize every configured TERRA objective at one SQP iterate."""
         return self._constraints.objective.quadratic_terms(self, q, q_t_last, frame_idx)
 
-    def _solve_legacy_with_quadratic_terms(
-        self,
-        terms: Sequence[_QuadraticTerm],
-        *args,
-        **kwargs,
-    ):
-        """Inject attached terms into OmniRetarget's legacy CVXPY formulation."""
-        import cvxpy as cp
-        from holosoma_retargeting.src import interaction_mesh_retargeter as _imr
-
-        def append_terms(objective):
-            return _objective_with_quadratic_terms(cp, objective, terms)
-
-        original = _imr.cp
-        _imr.cp = _CvxpyShim(cp, append_terms)
-        try:
-            return self._solve_or_relax_nonpen(*args, **kwargs)
-        finally:
-            _imr.cp = original
-
     def solve_single_iteration(self, *args, **kwargs):
         """Solve one SQP iteration with all attached TERRA costs.
 
@@ -767,7 +718,6 @@ class TerraRetargeter(InteractionMeshRetargeter if OMNIRETARGET_INSTALLED else o
             The OmniRetarget-compatible solve result.
 
         Raises:
-            RuntimeError: If the OmniRetarget objective cannot be intercepted safely.
             ValueError: If the selected solver backend is invalid.
         """
         # Record the frame before any early return: `_update_jacobians_and_phis_from_q` is
@@ -775,12 +725,13 @@ class TerraRetargeter(InteractionMeshRetargeter if OMNIRETARGET_INSTALLED else o
         bound = self._bind_solve_arguments(args, kwargs)
         self._current_frame = int(bound.arguments["frame_idx"])
 
-        if self._solver_backend not in {"legacy", "condensed_cvxpy", "native_clarabel"}:
+        if self._solver_backend not in {"omniretarget", "native_clarabel"}:
             raise ValueError(
-                "solver_backend must be 'legacy', 'condensed_cvxpy', or 'native_clarabel', "
-                f"got {self._solver_backend!r}"
+                f"solver_backend must be 'omniretarget' or 'native_clarabel', got {self._solver_backend!r}"
             )
-        if self._solver_backend == "legacy" and not self._has_attached_quadratic_terms():
+        if self._solver_backend == "omniretarget":
+            if self._has_attached_quadratic_terms():
+                raise ValueError("Attached TERRA costs require the native_clarabel backend")
             return self._solve_or_relax_nonpen(*args, **kwargs)
 
         q = np.copy(bound.arguments["q_locked"])
@@ -788,9 +739,7 @@ class TerraRetargeter(InteractionMeshRetargeter if OMNIRETARGET_INSTALLED else o
         frame_idx = int(bound.arguments["frame_idx"])
         terms = self._attached_quadratic_terms(q, bound.arguments["q_t_last"], frame_idx)
 
-        if self._solver_backend in {"condensed_cvxpy", "native_clarabel"}:
-            return self._solve_condensed_or_relax_nonpen(bound, terms)
-        return self._solve_legacy_with_quadratic_terms(terms, *args, **kwargs)
+        return self._solve_condensed_or_relax_nonpen(bound, terms)
 
     def _condensed_laplacian_linearization(
         self,
@@ -1092,22 +1041,20 @@ class TerraRetargeter(InteractionMeshRetargeter if OMNIRETARGET_INSTALLED else o
         )
         dqa_smooth = arguments["q_t_last"][self.q_a_indices] - q_a_n_last
         trust_radius = self._trust_radius(bool(arguments["init_t"]))
-        if self._solver_backend == "native_clarabel":
-            native_result = self._try_native_condensed_solve(
-                q,
-                q_a_n_last,
-                dqa_smooth,
-                laplacian,
-                constraints,
-                terms,
-                arguments,
-                trust_radius,
-            )
-            if native_result is not None:
-                return native_result
+        native_result = self._try_native_condensed_solve(
+            q,
+            q_a_n_last,
+            dqa_smooth,
+            laplacian,
+            constraints,
+            terms,
+            arguments,
+            trust_radius,
+        )
+        if native_result is not None:
+            return native_result
 
-        # The CVXPY expression tree is built only for the condensed backend or after a
-        # certified native failure; successful native iterations remain CVXPY-free.
+        # Build the CVXPY fallback only when the native solve fails.
         return self._solve_cvxpy_condensed(
             q,
             q_a_n_last,

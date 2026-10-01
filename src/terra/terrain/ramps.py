@@ -184,7 +184,7 @@ class _RampEvidence:
     raw_z: np.ndarray
     offset_z: np.ndarray
     offset_datum: float
-    legacy_z: np.ndarray
+    offset_height: np.ndarray
     origin: np.ndarray
     axis: np.ndarray
     longitudinal: np.ndarray
@@ -202,7 +202,7 @@ def _collect_ramp_evidence(
     raw_z = np.array([event.z for event in events])
     offset_z = np.array([event.z - offsets.get(event.joint, 0.0) for event in events])
     offset_datum = float(offset_z.min())
-    legacy_z = offset_z - offset_datum
+    offset_height = offset_z - offset_datum
 
     origin = xy.mean(axis=0)
     centred_xy = xy - origin
@@ -219,7 +219,7 @@ def _collect_ramp_evidence(
         raw_z=raw_z,
         offset_z=offset_z,
         offset_datum=offset_datum,
-        legacy_z=legacy_z,
+        offset_height=offset_height,
         origin=origin,
         axis=axis,
         longitudinal=longitudinal,
@@ -354,15 +354,15 @@ def _summarize_profile(
     envelope_source: str,
     report: dict,
 ) -> tuple[float, float]:
-    """Record the fitted incline and its legacy-comparable diagnostics."""
+    """Record the fitted incline and its contact-height diagnostics."""
     rise = slope * (u1 - u0)
     length = u1 - u0
-    legacy_u0, legacy_u1, legacy_slope = _ramp_profile(
+    offset_u0, offset_u1, offset_slope = _ramp_profile(
         evidence.longitudinal,
-        evidence.legacy_z,
+        evidence.offset_height,
     )
-    legacy_residual = evidence.legacy_z - legacy_slope * (
-        np.clip(evidence.longitudinal, legacy_u0, legacy_u1) - legacy_u0
+    offset_residual = evidence.offset_height - offset_slope * (
+        np.clip(evidence.longitudinal, offset_u0, offset_u1) - offset_u0
     )
     on_incline = np.sort(evidence.longitudinal[(evidence.longitudinal >= u0) & (evidence.longitudinal <= u1)])
     edges = np.concatenate([[u0], on_incline, [u1]])
@@ -383,7 +383,7 @@ def _summarize_profile(
         profile_joint_offsets=fitted_offsets,
         profile_joint_offsets_fixed=bool(fixed_joint_offsets),
         profile_surface_datum=float(evidence.offset_datum),
-        legacy_profile_rms=float(np.sqrt(np.mean(legacy_residual**2))),
+        contact_profile_rms=float(np.sqrt(np.mean(offset_residual**2))),
         slope_source=("supported_foot_orientation" if slope_hint_deg is not None else "footfalls"),
         motion_foot_span_u=(float(envelope_u.min()), float(envelope_u.max())),
         landing_extent_source=envelope_source,

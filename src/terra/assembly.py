@@ -135,7 +135,7 @@ class SolveContext:
             self.config = SolverConfig.from_mapping(self.config).for_scene(on_terrain=self.on_terrain)
 
     def advance(self, expected: SolveStage, target: SolveStage) -> None:
-        """Advance the pipeline only from the expected auditable stage."""
+        """Advance the pipeline only from the expected stage."""
         if self.stage is not expected:
             raise RuntimeError(
                 f"invalid solver stage transition: expected {expected.value!r}, "

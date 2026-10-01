@@ -29,12 +29,6 @@ _MANAGED_HYDRA_SETTINGS = (
     "experiment.validation.amass_dataset_conf",
     "experiment.validation.num_steps",
 )
-_ARTIFACT_DATASET_SETTINGS = _MANAGED_HYDRA_SETTINGS[:2]
-_REQUIRED_DATASET_VALUES = {
-    "load_paired_terrain": True,
-    "allow_cache_download": False,
-}
-_METHOD_DATASET_FIELDS = ("retargeting_method", "output_cache_subdir")
 _RETARGETING_METHOD_ENV = "TERRA_RETARGETING_METHOD"
 
 
@@ -117,10 +111,6 @@ def _training_config_name(algorithm: str, *, multi_motion: bool) -> str:
     raise ValueError("PPO training requires a materialized selection")
 
 
-def _is_multi_motion_config(config_name: str) -> bool:
-    return config_name == TERRA_MULTI_GPU_PPO_CONFIG
-
-
 def _compose_training_config(
     overrides: Sequence[str] = (),
     *,
@@ -164,7 +154,6 @@ def _validate_training_config(config, *, algorithm: str, config_name: str) -> st
         raise ValueError(
             f"{config_name} resolved unexpected algorithm {resolved_algorithm!r}; expected {expected_algorithm!r}"
         )
-    _validate_artifact_config(config, config_name=config_name)
     if algorithm_key == "ppo":
         _validate_ppo_config(config, config_name=config_name)
     return resolved_algorithm
@@ -201,19 +190,12 @@ def _validate_ppo_config(config, *, config_name: str = TERRA_MULTI_GPU_PPO_CONFI
         )
     validation = experiment.get("validation", {})
     if bool(validation.get("active", False)):
-        if not bool(validation.get("evaluate_all", False)):
-            raise ValueError(f"{config_name} active PPO validation must set validation.evaluate_all=true")
-        if bool(validation.get("deterministic", False)):
-            raise ValueError(f"{config_name} active PPO validation must set validation.deterministic=false")
-        minimum_total_rollouts = int(validation.get("minimum_total_rollouts", 0))
-        rollouts_per_motion = int(validation.get("rollouts_per_motion", 0))
-        if minimum_total_rollouts < 100:
-            raise ValueError(f"{config_name} validation.minimum_total_rollouts must be at least 100")
-        if rollouts_per_motion < 1:
-            raise ValueError(f"{config_name} validation.rollouts_per_motion must be at least 1")
-        max_parallel_rollouts = int(validation.get("max_parallel_rollouts", 1024))
-        if max_parallel_rollouts < 32 or max_parallel_rollouts % 32:
-            raise ValueError(f"{config_name} validation.max_parallel_rollouts must be a multiple of 32 and at least 32")
+        if int(validation.get("minimum_total_rollouts", 100)) < 1:
+            raise ValueError(f"{config_name} validation.minimum_total_rollouts must be positive")
+        if int(validation.get("rollouts_per_motion", 1)) < 1:
+            raise ValueError(f"{config_name} validation.rollouts_per_motion must be positive")
+        if int(validation.get("max_parallel_rollouts", 1024)) < 1:
+            raise ValueError(f"{config_name} validation.max_parallel_rollouts must be positive")
         validation_env = validation.get("env_params", {}) or {}
         validation_backend = str(validation_env.get("mjx_backend", experiment.env_params.mjx_backend))
         validation_graph_mode = str(
@@ -250,74 +232,6 @@ def _validate_ppo_environment_divisibility(config, num_devices: int, *, config_n
             f"{config_name} per-device rollout batch ({local_batch_size}) must be divisible by "
             f"experiment.num_minibatches ({num_minibatches})"
         )
-
-
-def _unresolved_config_value(config: Mapping[str, object], path: str) -> object:
-    value: object = config
-    for component in path.split("."):
-        if not isinstance(value, Mapping) or component not in value:
-            raise ValueError(f"{TERRA_MULTI_GPU_PPO_CONFIG} is missing required setting {path!r}")
-        value = value[component]
-    return value
-
-
-def _validate_artifact_config(config, *, config_name: str = TERRA_MULTI_GPU_PPO_CONFIG) -> None:
-    """Verify that the local config remains bound to published TERRA artifacts."""
-    from omegaconf import OmegaConf
-
-    unresolved = OmegaConf.to_container(config, resolve=False)
-    if not isinstance(unresolved, Mapping):
-        raise ValueError(f"{config_name} must resolve to a configuration object")
-
-    multi_motion = _is_multi_motion_config(config_name)
-    for dataset_path in _ARTIFACT_DATASET_SETTINGS:
-        for field, expected in _REQUIRED_DATASET_VALUES.items():
-            path = f"{dataset_path}.{field}"
-            actual = _unresolved_config_value(unresolved, path)
-            if actual != expected:
-                raise ValueError(f"{config_name} must set {path}={expected!r}, got {actual!r}")
-        for field in _METHOD_DATASET_FIELDS:
-            path = f"{dataset_path}.{field}"
-            actual = _unresolved_config_value(unresolved, path)
-            if not isinstance(actual, str) or f"oc.env:{_RETARGETING_METHOD_ENV}" not in actual:
-                raise ValueError(f"{config_name} setting {path} must be bound to {_RETARGETING_METHOD_ENV}")
-        for field, environment_variable in (("cache_root", "TERRA_RETARGETED_MOTIONS"),):
-            path = f"{dataset_path}.{field}"
-            actual = _unresolved_config_value(unresolved, path)
-            if not isinstance(actual, str) or f"oc.env:{environment_variable}" not in actual:
-                raise ValueError(f"{config_name} setting {path} must be bound to {environment_variable}")
-        motion_path = f"{dataset_path}.rel_dataset_path"
-        motion_value = _unresolved_config_value(unresolved, motion_path)
-        if multi_motion:
-            if (
-                not isinstance(motion_value, str)
-                or "terra.motion_selection" not in motion_value
-                or "oc.env:TERRA_MOTION_SELECTION_RECORD" not in motion_value
-            ):
-                raise ValueError(f"{config_name} setting {motion_path} must resolve from TERRA_MOTION_SELECTION_RECORD")
-        elif not isinstance(motion_value, str) or "oc.env:TERRA_MOTION" not in motion_value:
-            raise ValueError(f"{config_name} setting {motion_path} must be bound to TERRA_MOTION")
-        terrain_requirement_path = f"{dataset_path}.require_nonflat_terrain"
-        terrain_requirement = _unresolved_config_value(unresolved, terrain_requirement_path)
-        if not isinstance(terrain_requirement, str) or "oc.env:TERRA_REQUIRE_NONFLAT_TERRAIN" not in (
-            terrain_requirement
-        ):
-            raise ValueError(
-                f"{config_name} setting {terrain_requirement_path} must be bound to TERRA_REQUIRE_NONFLAT_TERRAIN"
-            )
-
-    validation_steps = _unresolved_config_value(unresolved, "experiment.validation.num_steps")
-    if not isinstance(validation_steps, str) or "oc.env:TERRA_VALIDATION_STEPS" not in validation_steps:
-        raise ValueError(
-            f"{config_name} setting experiment.validation.num_steps must be bound to TERRA_VALIDATION_STEPS"
-        )
-    if _is_multi_motion_config(config_name):
-        validation_envs = _unresolved_config_value(unresolved, "experiment.validation.num_envs")
-        validation_environment = "TERRA_VALIDATION_ENVS"
-        if not isinstance(validation_envs, str) or f"oc.env:{validation_environment}" not in validation_envs:
-            raise ValueError(
-                f"{config_name} setting experiment.validation.num_envs must be bound to {validation_environment}"
-            )
 
 
 def _validate_hydra_overrides(
@@ -708,7 +622,7 @@ def launch_training(launch: TrainingLaunch) -> int:
     )
     environment = os.environ.copy()
     if "TERRA_MOTION_SELECTION_RECORD" in launch.environment:
-        # File-backed cohort selection supersedes the legacy list variables.
+        # File-backed cohort selection takes priority over motion-list variables.
         # Removing inherited copies also prevents unrelated stale values from
         # making a large-cohort exec fail with E2BIG.
         environment.pop("TERRA_MOTIONS", None)

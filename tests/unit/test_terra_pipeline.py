@@ -637,7 +637,7 @@ def test_robot_assets_reject_unknown_environment_before_loading_paths(tmp_path):
         terra_pipeline._resolve_robot_assets("UnknownRobot", tmp_path / "smpl", tmp_path / "shape.npz")
 
 
-def test_flat_postprocessing_preserves_historical_operation_order(monkeypatch):
+def test_flat_postprocessing_measures_before_alignment_and_assembly(monkeypatch):
     calls = []
     trajectory = object()
     site_names = np.asarray(["site"])

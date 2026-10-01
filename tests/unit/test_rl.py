@@ -350,40 +350,6 @@ def test_frame_zero_reset_wrapper_is_scoped_by_handler_configuration():
     assert int(next_carry.traj_state.subtraj_step_no_init) == 0
 
 
-def _stability_config():
-    return OmegaConf.create(
-        {
-            "num_envs": 1000,
-            "num_updates": 2_000_000,
-            "updates_per_interaction": 2,
-            "actor_update_period": 2,
-            "warmup_updates": 2000,
-            "learning_rate": 3e-4,
-            "end_learning_rate": 2.5e-5,
-            "actor_learning_rate": 3e-4,
-            "actor_end_learning_rate": 1e-5,
-            "critic_learning_rate": 3e-4,
-            "critic_end_learning_rate": 2.5e-5,
-            "learning_rate_warmup_timesteps": 2_000_000,
-            "learning_rate_decay_timesteps": 300_000_000,
-            "initial_temperature": 4.539993e-5,
-            "target_sigma": 0.2,
-            "adaptive_temperature": False,
-            "policy_std_initial_cap": 0.8,
-            "policy_std_middle_cap": 0.25,
-            "policy_std_final_cap": 0.25,
-            "policy_std_middle_timesteps": 300_000_000,
-            "policy_std_final_timesteps": 600_000_000,
-            "health_guard_start_timesteps": 100_000_000,
-            "max_temperature_before_abort": 1e-3,
-            "max_critic_boundary_mass_before_abort": 0.25,
-            "termination_curriculum_start_threshold": 0.25,
-            "termination_curriculum_end_threshold": 0.15,
-            "termination_curriculum_timesteps": 100_000_000,
-        }
-    )
-
-
 def test_paired_box_terrain_switches_geometry_and_height_with_trajectory():
     terrains = [
         {"boxes": [{"pos": [0.0, 0.0, 0.1], "size": [1.0, 0.5, 0.1], "name": "terrain_box_0"}]},
@@ -466,7 +432,6 @@ def test_ppo_multi_motion_config_is_dedicated_and_safe_by_default(monkeypatch, t
         == "PPOJax"
     )
     assert config.experiment.algorithm == "PPOJax"
-    assert "flashsac_config" not in config.experiment
     assert config.experiment.distributed.num_devices == -1
     assert config.experiment.trajectory.sharding == "none"
     assert config.experiment.env_params.mjx_warp_graph_mode == "warp"

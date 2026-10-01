@@ -74,7 +74,7 @@ column also works.
 `status.csv` records `ok` or `failed` for every selected motion and an
 error message for failures. Rerunning the command refits selected motions and replaces
 their JSON records. Start there if the command exits nonzero; failed fits remain
-visible in the selected denominator.
+visible in the selected set.
 
 ```bash
 cat "$TERRA_ARTIFACT_ROOT/reconstruction/terra/status.csv"

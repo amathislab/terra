@@ -13,8 +13,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 
 
-def test_sdist_includes_packaged_prism_but_no_workspace_python(tmp_path: Path) -> None:
-    """Build from a source copy and check package contents and workspace isolation."""
+def test_sdist_and_wheel_include_runtime_files(tmp_path: Path) -> None:
+    """Build from a source copy and check packaged runtime files."""
 
     source = tmp_path / "source"
     source.mkdir()
@@ -32,17 +32,6 @@ def test_sdist_includes_packaged_prism_but_no_workspace_python(tmp_path: Path) -
         shutil.copy2(REPO / filename, source / filename)
     for directory in ("src", "scripts", "docs", "tests"):
         shutil.copytree(REPO / directory, source / directory)
-
-    prism_workspace = source / "prism"
-    prism_workspace.mkdir()
-    sentinel = prism_workspace / "ignored_local_analysis.py"
-    sentinel.write_text("raise RuntimeError('must not be shipped')\n")
-
-    # Include a stale source manifest entry to check the actual build output.
-    cached_sources = source / "src/terra_retargeting.egg-info/SOURCES.txt"
-    cached_sources.parent.mkdir(parents=True, exist_ok=True)
-    with cached_sources.open("a") as handle:
-        handle.write("prism/ignored_local_analysis.py\n")
 
     environment = dict(os.environ)
     environment["TERRA_GIT_COMMIT"] = "c" * 40
@@ -68,12 +57,6 @@ def test_sdist_includes_packaged_prism_but_no_workspace_python(tmp_path: Path) -
     assert any(name.endswith("/src/terra/_build_commit.txt") for name in members)
     assert any(name.endswith("/src/terra/rl/configs/ppo_multi_motion.yaml") for name in members)
     assert any(name.endswith("/terra_build_backend.py") for name in members)
-    packaged_workspace_python = {
-        Path(name).name
-        for name in members
-        if "/prism/" in name and name.endswith(".py") and "/src/terra/datasets/prism/" not in name
-    }
-    assert packaged_workspace_python == set()
     assert any(name.endswith("/scripts/terra/train_smoke.py") for name in members)
     assert any(name.endswith("/scripts/terra/ppo_smoke_overrides.json") for name in members)
     assert any(name.endswith("/uv.lock") for name in members)

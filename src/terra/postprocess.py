@@ -439,10 +439,8 @@ def landmark_error(
     """
     model = ctx.model
     if target_joints is None:
-        # Keep the historical source-rate path used by flat motions: central-difference
-        # trimming can leave one extra target at the tail, and the old implementation
-        # simply indexed the first ``len(qpos)`` entries. This branch is analysis-only and
-        # must not turn the terrain observability refactor into a flat trajectory failure.
+        # Flat motions may have one extra source target after central-difference trimming.
+        # Use the first ``len(qpos)`` entries for this analysis-only path.
         targets = np.asarray(ctx.human_joints)
         if len(targets) < len(qpos):
             raise ValueError(f"landmark target length must cover qpos: {len(targets)} < {len(qpos)}")

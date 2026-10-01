@@ -18,7 +18,6 @@ from terra.artifacts import validate_retarget_artifacts
 from terra.paths import StorageRoots
 
 SEGMENT_POLICY = "balanced-temporal-v2"
-LEGACY_SEGMENT_POLICY = "over20s-balanced-max10s-v1"
 SEGMENT_REQUIRED_FIELDS = (
     "source_motion",
     "segment_start_frame",
@@ -148,12 +147,8 @@ def selection_segment(row: Mapping[str, str]) -> SelectionSegment | None:
         )
     except ValueError as error:
         raise ValueError(f"segmented selection row {row.get('motion', '')!r} has invalid numeric fields") from error
-    if segment.policy not in {SEGMENT_POLICY, LEGACY_SEGMENT_POLICY}:
+    if segment.policy != SEGMENT_POLICY:
         raise ValueError(f"unsupported segment policy {segment.policy!r}")
-    if segment.policy == LEGACY_SEGMENT_POLICY and (
-        segment.trigger_seconds != 20.0 or segment.maximum_segment_seconds != 10.0
-    ):
-        raise ValueError("legacy segment policy requires the default duration bounds")
     expected = temporal_segments(
         segment.source_num_frames, segment.source_frequency_hz,
         trigger_seconds=segment.trigger_seconds, maximum_segment_seconds=segment.maximum_segment_seconds,

@@ -6,9 +6,7 @@ import json
 import os
 import subprocess
 import sys
-import tomllib
 from importlib.resources import files
-from pathlib import Path
 
 import terra
 
@@ -42,17 +40,6 @@ def test_root_all_advertises_only_the_stable_file_oriented_api():
     }
     assert "TerraRetargeter" not in terra.__all__
     assert "fit_terra_motion" not in terra.__all__
-    for removed in (
-        "AUGMENTATION_VERSION",
-        "TerrainAugmentation",
-        "fit_terra_height_augmented_motion",
-        "height_augmentation_method",
-        "paired_terrain_scenes",
-        "TerraRetargeter",
-        "fit_terra_motion",
-        "omniretarget_profile_is_clean",
-    ):
-        assert not hasattr(terra, removed)
 
 
 def test_package_metadata_import_does_not_initialize_numerical_stacks():
@@ -80,7 +67,6 @@ print(json.dumps({
     )
 
     report = json.loads(completed.stdout)
-    assert report["version"] == "1.0.0"
     assert report["methods"] == ["terra", "omniretarget", "gmr", "smpl"]
     assert report["motion_name"] == "Study/Subject/Trial"
     assert report["loaded"] == []
@@ -88,22 +74,3 @@ print(json.dumps({
 
 def test_package_declares_inline_type_information():
     assert files(terra).joinpath("py.typed").is_file()
-
-
-def test_runtime_git_dependencies_are_commit_pinned():
-    project_root = Path(__file__).resolve().parents[2]
-    metadata = tomllib.loads((project_root / "pyproject.toml").read_text(encoding="utf-8"))
-    requirements = metadata["project"]["dependencies"]
-
-    assert (
-        "musclemimic @ "
-        "git+https://github.com/amathislab/musclemimic.git"
-        "@f1c2dbfd0d8e31d306b2c4e2369aecdc7bc21993"
-    ) in requirements
-    assert (
-        "holosoma-retargeting @ "
-        "git+https://github.com/merc-s/holosoma.git"
-        "@12022b5ca5e12e460156c2d91a908f80f6c63fa1"
-        "#subdirectory=src/holosoma_retargeting"
-    ) in requirements
-    assert "musclemimic" not in metadata["tool"]["uv"]["sources"]

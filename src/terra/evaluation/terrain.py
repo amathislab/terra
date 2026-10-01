@@ -1,4 +1,4 @@
-"""Package-owned terrain interaction measurement for the unified evaluator.
+"""Terrain interaction measurement for the unified evaluator.
 
 This is the metric core of [check_beam_motion.py](check_beam_motion.py), lifted out so that
 the single-motion report, the subset scoring and the video renderer all read the same

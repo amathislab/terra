@@ -1,1 +1,1 @@
-"""Package-owned, schema-specific dataset conversion and evidence adapters."""
+"""Dataset conversion and evidence adapters for supported schemas."""

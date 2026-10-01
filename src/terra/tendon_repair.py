@@ -357,7 +357,7 @@ def _candidate_spans(
     changed_frames: int,
     trajectory_frames: int,
 ) -> list[tuple[int, int]]:
-    """Enumerate endpoint pairs in the historical center/preference order."""
+    """Enumerate endpoint pairs by center, then by preceding-frame count."""
     spans = []
     for centre in (event_frame, event_frame - 1):
         for pre in range(1, changed_frames + 1):

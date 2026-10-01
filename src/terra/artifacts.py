@@ -1,4 +1,4 @@
-"""Transactional publication and validation of retargeted motion artifacts.
+"""Publication and validation of retargeted motion artifacts.
 
 This module owns the persistent wire format. It deliberately avoids importing the
 retargeting solvers so callers can inspect completed artifacts in lightweight tools

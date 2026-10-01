@@ -52,8 +52,7 @@ def fit_motion(
     report = {}
     if target_fps is not None:
         motion_data, report = resample_smplh_motion(motion_data, target_fps)
-        # The upstream skip is the historical low-rate baseline. Once an exact target
-        # rate is requested, every resampled input frame must enter the optimizer.
+        # With an exact target rate, every resampled input frame enters the optimizer.
         skip_steps = False
 
     trajectory, analysis = _fit_smpl_motion(

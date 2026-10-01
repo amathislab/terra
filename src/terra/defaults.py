@@ -85,7 +85,7 @@ DEFAULT_SOLVER_BACKEND = "native_clarabel"
 
 #: Finite SQP trust radius allowed only while solving the first source frame. The ordinary
 #: 0.2 radius can be too small to reach the model's constrained articulated manifold from
-#: its generic zero pose; the historical fallback removed the trust region altogether.
+#: its generic zero pose; the first step needs a larger finite radius.
 DEFAULT_INITIAL_STEP_SIZE = 1.0
 
 

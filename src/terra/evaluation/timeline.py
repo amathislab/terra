@@ -1,4 +1,4 @@
-"""Package-owned source loading and timeline construction for metric evaluators."""
+"""Source loading and timeline construction for metric evaluators."""
 
 from __future__ import annotations
 

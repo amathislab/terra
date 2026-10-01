@@ -125,7 +125,7 @@ def contact_ramp(
             release at each observed foot-off.
         release_ramp_frames: Optional independent release duration.  One keeps full
             authority through the final detected contact frame; ``None`` retains the
-            historical symmetric ramp.
+            symmetric ramp on both boundaries.
         preserve_clipped_boundaries: Keep a contact that is already active at the
             first sample or still active at the last sample fully engaged at that
             recording boundary.  Such boundaries are censoring, not observed

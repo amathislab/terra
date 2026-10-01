@@ -768,7 +768,7 @@ def _configure_solver(
     attach_swing_clearance(ctx, retargeter, toe_contact, nonpen_mode)
 
     # OmniRetarget thresholds per-frame toe displacement. Express the public setting as
-    # speed while preserving its historical default of 0.01 m per source frame.
+    # speed using 0.01 m per source frame as the default.
     foot_speed = config.foot_planted_speed if config.foot_planted_speed is not None else 0.01 * ctx.fps
     foot_sticking = extract_foot_sticking_sequence_velocity(
         ctx.human_joints,

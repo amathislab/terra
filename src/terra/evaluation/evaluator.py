@@ -127,9 +127,8 @@ def model():
 
     Constructing the environment is intentional: ``MyoFullBody`` owns the complete
     finger-disabling transform, including removal of finger muscles and tendons.
-    The lighter-weight metrics helper historically removed only finger joints and
-    therefore compiled an evaluator-only 424-tendon model instead of the 362-tendon
-    retargeting and policy model.
+    Disabling only finger joints would compile a 424-tendon model rather than the
+    362-tendon retargeting and policy model.
     """
     global _MODEL
     if _MODEL is None:

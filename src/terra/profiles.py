@@ -77,7 +77,7 @@ class SolverConfig(Mapping[str, object]):
 
     The public API still accepts a flat mapping so existing JSON configuration files
     remain valid. Once resolved, every accepted key has a named field and unknown
-    keys fail closed. Conditional defaults are materialized by :meth:`for_scene`
+    keys raise an error. Conditional defaults are materialized by :meth:`for_scene`
     before a :class:`terra.assembly.SolveContext` is created.
     """
 
@@ -344,7 +344,6 @@ class SolverConfig(Mapping[str, object]):
 # still substitutes the documented flat-scene values for fields whose meaning is
 # terrain-dependent (for example clearance mode and self-collision weight).
 FROZEN_TERRA_PROFILE_NAME = "v2-p02"
-FROZEN_TERRA_PROFILE_SHA256 = "1e734d48345686dbc548e7c379cbab321f621cf6d4642494dfbceb273ae06a04"
 FROZEN_TERRA_TERRAIN_PROFILE: Mapping[str, object] = MappingProxyType(
     {
         "smooth_weight": 0.2,
@@ -581,7 +580,6 @@ def all_active_qp_terms(config: Mapping[str, object] | SolverConfig, *, on_terra
 
 __all__ = [
     "FROZEN_TERRA_PROFILE_NAME",
-    "FROZEN_TERRA_PROFILE_SHA256",
     "FROZEN_TERRA_TERRAIN_PROFILE",
     "MATCHED_TERRA_CORE_OVERRIDES",
     "OMNIRETARGET_PROFILE",

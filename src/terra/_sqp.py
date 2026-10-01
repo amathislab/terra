@@ -167,7 +167,7 @@ def _objective_with_quadratic_terms(cp, objective, terms: Sequence[_QuadraticTer
     step = next((variable for variable in objective.variables() if variable.name() == "dqa"), None)
     if step is None:
         raise RuntimeError(
-            "OmniRetarget no longer names the step variable 'dqa'; the added costs "
+            "OmniRetarget's step variable 'dqa' is unavailable; the added costs "
             "cannot be attached. See TerraRetargeter."
         )
     return cp.Minimize(objective.args[0] + cp.sum([term.cvxpy_expression(cp, step) for term in terms]))

@@ -26,11 +26,15 @@
   <div class="hero-shade"></div>
   <nav class="nav" aria-label="Main navigation">
     <a class="wordmark" href="#top" aria-label="TERRA home">TERRA</a>
-    <div class="nav-links"><a href="#abstract">Abstract</a><a href="#methodology">Methodology</a><a href="#results">Results</a><a href="#citation">BibTeX</a></div>
+    <div class="nav-links"><a href="#abstract">Abstract</a><a href="#methodology">Methodology</a><a href="#results">Results</a><a href="#resources">Resources</a><a href="#citation">BibTeX</a></div>
   </nav>
   <div class="hero-content">
     <h1><span class="title-mark">TERRA<span class="visually-hidden">:</span></span>Terrain-Aware Reconstruction, Retargeting and Control for Musculoskeletal Locomotion</h1>
-    <p class="authors">Merkourios Simos · Chengkun Li · Bianca Ziliotto · Alexander Mathis</p>
+    <p class="authors"><a href="https://people.epfl.ch/merkourios.simos?lang=en">Merkourios Simos</a> · <a href="https://charlieleee.github.io/">Chengkun Li</a> · <a href="https://people.epfl.ch/bianca.ziliotto?lang=en">Bianca Ziliotto</a> · <a href="https://people.epfl.ch/alexander.mathis?lang=en">Alexander Mathis</a></p>
+    <p class="affiliations">
+      <a href="https://cnai.epfl.ch/">Mathis Group of Computational Neuroscience &amp; AI</a>
+      <span><a class="epfl-link" href="https://www.epfl.ch/"><img src="assets/images/epfl-logo.svg" alt="EPFL" width="48" height="14"></a></span>
+    </p>
     <div class="hero-actions">
       <a class="hero-link hero-link-paper" href="https://arxiv.org/abs/2609.38653">Paper (arXiv) <span aria-hidden="true">↗</span></a>
       <a class="hero-link" href="https://github.com/amathislab/terra">Project repository <span aria-hidden="true">↗</span></a>
@@ -211,21 +215,60 @@
       </div>
     </div>
   </section>
+  <section class="section model-resources" id="resources" aria-labelledby="resources-heading">
+    <h2 id="resources-heading">Related work and resources</h2>
+    <div class="resource-grid">
+      <article class="resource-card" aria-labelledby="musclemimic-heading">
+        <h3 id="musclemimic-heading">MuscleMimic</h3>
+        <p>Training and evaluation code for muscle-actuated motion-imitation policies.</p>
+        <ul class="resource-links" aria-label="MuscleMimic resources">
+          <li><a href="https://github.com/amathislab/musclemimic">MuscleMimic on GitHub <span aria-hidden="true">↗</span></a></li>
+          <li><a href="https://arxiv.org/abs/2603.25544">MuscleMimic paper <span aria-hidden="true">↗</span></a></li>
+        </ul>
+      </article>
+      <article class="resource-card" aria-labelledby="kinesis-heading">
+        <h3 id="kinesis-heading">Kinesis</h3>
+        <p>Reinforcement learning for muscle-driven motion imitation.</p>
+        <ul class="resource-links" aria-label="Kinesis resources">
+          <li><a href="https://github.com/amathislab/Kinesis">Kinesis on GitHub <span aria-hidden="true">↗</span></a></li>
+          <li><a href="https://arxiv.org/abs/2503.14637">Kinesis paper <span aria-hidden="true">↗</span></a></li>
+        </ul>
+      </article>
+      <article class="resource-card" aria-labelledby="musclemimic-models-heading">
+        <h3 id="musclemimic-models-heading">MuscleMimic Models</h3>
+        <p>MyoFullBody and MyoBimanualArm model assets, usable without the MuscleMimic training code.</p>
+        <ul class="resource-links" aria-label="MuscleMimic model resources">
+          <li><a href="https://github.com/amathislab/musclemimic_models">Model assets on GitHub <span aria-hidden="true">↗</span></a></li>
+        </ul>
+      </article>
+      <article class="resource-card" aria-labelledby="myosim-heading">
+        <h3 id="myosim-heading">MyoSim</h3>
+        <p>MuJoCo models of the arm, leg, torso, and hand, used by MyoSuite.</p>
+        <ul class="resource-links" aria-label="MyoSim resources">
+          <li><a href="https://github.com/MyoHub/myo_sim">MyoSim on GitHub <span aria-hidden="true">↗</span></a></li>
+          <li><a href="https://arxiv.org/abs/2205.13600">MyoSuite paper <span aria-hidden="true">↗</span></a></li>
+        </ul>
+      </article>
+    </div>
+  </section>
   <section class="citation" id="citation" aria-labelledby="citation-heading">
     <div class="section">
       <div class="citation-heading"><h2 id="citation-heading">BibTeX</h2><button class="copy-button" type="button" hidden>Copy citation</button></div>
       <pre><code id="bibtex">@misc{simos2026terra,
-  title  = {{TERRA}: Terrain-Aware Reconstruction, Retargeting
-            and Control for Musculoskeletal Locomotion},
-  author = {Simos, Merkourios and Li, Chengkun and
-            Ziliotto, Bianca and Mathis, Alexander},
-  year   = {2026},
-  url    = {https://cnai.epfl.ch/terra/}
+  title         = {{TERRA}: Terrain-Aware Reconstruction, Retargeting
+                   and Control for Musculoskeletal Locomotion},
+  author        = {Simos, Merkourios and Li, Chengkun and
+                   Ziliotto, Bianca and Mathis, Alexander},
+  year          = {2026},
+  eprint        = {2609.38653},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.RO},
+  url           = {https://arxiv.org/abs/2609.38653}
 }</code></pre>
       <p class="copy-status" role="status" aria-live="polite"></p>
     </div>
   </section>
 </main>
-<footer>TERRA · <a href="https://github.com/amathislab/terra">Repository</a> · <a href="assets/fonts/LICENSE.txt">Charter typeface</a> · <a href="#top">Back to top ↑</a></footer>
+<footer>TERRA · <a href="https://cnai.epfl.ch/">Mathis Group</a> · <a href="https://www.epfl.ch/">EPFL</a> · <a href="https://github.com/amathislab/terra">Repository</a> · <a href="assets/fonts/LICENSE.txt">Charter typeface</a> · <a href="#top">Back to top ↑</a></footer>
 </body>
 </html>

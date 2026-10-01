@@ -512,6 +512,68 @@ class _Stub(TerraRetargeter):
 
 
 @requires_omni
+def test_native_retargeting_step_moves_a_real_mujoco_body_toward_target():
+    """Exercise the assembled native objective and Clarabel with a MuJoCo Jacobian."""
+    from terra._sqp import _InequalityConstraints, _LaplacianLinearization
+
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <worldbody>
+            <body name="root" pos="0 0 1">
+              <freejoint/>
+              <geom type="sphere" size="0.05" mass="1"/>
+              <body name="pivot">
+                <joint name="hinge" type="hinge" axis="0 0 1"/>
+                <geom type="sphere" size="0.05" mass="1"/>
+                <body name="tip" pos="1 0 0"/>
+              </body>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    retargeter = _Stub(model)
+    retargeter._solver_backend = "native_clarabel"
+    retargeter.Q_diag = np.array([0.01])
+    retargeter.smooth_weight = 0.01
+    retargeter.track_nominal_indices = []
+    q = model.qpos0.copy()
+    jacobians, positions, _ = retargeter._calc_manipulator_jacobians(q, {"tip": "tip"})
+    initial_position = positions["tip"]
+    target_position = initial_position + np.array([0.0, 0.1, 0.0])
+    laplacian = _LaplacianLinearization(
+        jacobian=jacobians["tip"],
+        current=initial_position,
+        target=target_position,
+        row_scale=np.ones(3),
+    )
+    constraints = _InequalityConstraints(retargeter.nq_a)
+    constraints.add_variable_bounds(np.array([-0.2]), np.array([0.2]))
+
+    result = retargeter._try_native_condensed_solve(
+        q,
+        q[retargeter.q_a_indices],
+        np.zeros(retargeter.nq_a),
+        laplacian,
+        constraints,
+        [],
+        {"w_nominal_tracking": 0.0, "q_a_nominal": None, "verbose": False, "frame_idx": 0},
+        trust_radius=0.2,
+    )
+
+    assert result is not None
+    updated_q, objective = result
+    _, updated_positions, _ = retargeter._calc_manipulator_jacobians(updated_q, {"tip": "tip"})
+    assert updated_q[7] > 0.0
+    assert np.linalg.norm(updated_positions["tip"] - target_position) < np.linalg.norm(
+        initial_position - target_position
+    )
+    assert np.isfinite(objective)
+    assert retargeter._native_fallback_count == 0
+
+
+@requires_omni
 @pytest.mark.parametrize("method_profile", ["omniretarget", "terra"])
 def test_omniretarget_static_scene_binding_selects_terrain_box_collisions(
     monkeypatch, method_profile

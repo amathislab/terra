@@ -62,20 +62,7 @@ class TerraMethod:
             raise FileNotFoundError("motion is absent from the converted dataset manifest") from error
         if not record.fit_passed:
             raise ValueError("converted motion is marked fit_passed=false")
-        config = self._config
-        input_identity = {
-            "dataset": {
-                "name": config.name,
-                "config_path": str(self.dataset_config_path.expanduser().resolve()),
-                "contact_source": "kinematic",
-                "contact_joints": list(config.contact_joints),
-                "calibration_mode": config.calibration_mode,
-                "calibrate_sites": config.calibrate_sites,
-                "terrain_fit": config.terrain_fit,
-            },
-            "source_motion": {"identifier": record.motion, "path": str(record.source_path)},
-        }
-        return PreparedMotion(record, input_identity)
+        return PreparedMotion(record)
 
     def fit(
         self,
@@ -90,12 +77,6 @@ class TerraMethod:
         )
         if terrain is None:
             raise RuntimeError(f"TERRA {self.profile_name} produced no TerrainSpec for {motion}")
-        profile_input = report.get("input")
-        if not isinstance(profile_input, dict):
-            profile_input = {}
-        report["input"] = profile_input | {
-            **prepared.input,
-        }
         return ReconstructionResult(terrain.to_dict(), report, validation)
 
     def summarize(self, result: ReconstructionResult) -> dict[str, Any]:

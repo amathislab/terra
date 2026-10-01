@@ -25,7 +25,6 @@ from terra._musclemimic import (
 )
 from terra._revision import write_git_commit
 from terra.artifacts import (
-    RETARGET_ARTIFACT_FORMAT_VERSION,
     RetargetArtifacts,
     RetargetPaths,
     ValidatedRetargetArtifacts,
@@ -187,7 +186,7 @@ def _finalize_result(
     metadata: Mapping[str, object],
 ) -> RetargetResult:
     """Attach common metadata and recover the fitted playback terrain."""
-    recorded_analysis = {key: value for key, value in analysis.items() if not key.casefold().endswith("_sha256")}
+    recorded_analysis = dict(analysis)
     recorded_analysis.update(request.terrain_metadata)
     recorded_analysis.update(metadata)
     playback_terrain = _terrain_from_analysis(recorded_analysis, request.playback_terrain)
@@ -798,7 +797,6 @@ def retarget(
 
 
 __all__ = [
-    "RETARGET_ARTIFACT_FORMAT_VERSION",
     "SUPPORTED_METHODS",
     "RetargetArtifacts",
     "RetargetPaths",

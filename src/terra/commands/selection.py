@@ -120,16 +120,10 @@ def _verified_run(path: Path) -> tuple[dict[str, object], list[dict[str, str]]]:
     cache_root = payload.get("cache_root")
     manifest_value = payload.get("output_manifest")
     if not all(isinstance(value, str) and value for value in (dataset, env_name, cache_root, manifest_value)):
-        raise ValueError(f"dataset run is missing dataset/env/cache/manifest identity: {run_path}")
-    run_root = Path(str(payload.get("run_root", ""))).expanduser().resolve()
-    if run_root != run_path.parent:
-        raise ValueError(f"dataset run_root does not match its record location: {run_path}")
+        raise ValueError(f"dataset run is missing dataset, environment, cache root, or manifest: {run_path}")
     manifest = Path(manifest_value).expanduser().resolve()
     if not manifest.is_file():
         raise FileNotFoundError(f"dataset output manifest not found: {manifest}")
-    status = Path(str(payload.get("status", ""))).expanduser().resolve()
-    if not status.is_file():
-        raise ValueError(f"dataset status table is missing: {status}")
     with manifest.open(newline="") as handle:
         rows = list(csv.DictReader(handle))
     required = {"motion", "dataset", "passed"}
@@ -139,8 +133,6 @@ def _verified_run(path: Path) -> tuple[dict[str, object], list[dict[str, str]]]:
     if any(not motion for motion in motions) or len(motions) != len(set(motions)):
         raise ValueError(f"dataset output manifest contains empty or duplicate motion IDs: {manifest}")
     for row in rows:
-        if row["dataset"] != dataset:
-            raise ValueError(f"dataset identity mismatch for {row['motion']!r}: {manifest}")
         if row["passed"].strip().casefold() not in {"1", "true", "yes"}:
             raise ValueError(f"dataset output manifest contains a non-passing row: {row['motion']!r}")
     payload = payload | {

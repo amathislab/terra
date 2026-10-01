@@ -608,7 +608,7 @@ foot_orient_weight = 0.0
 
 
 @pytest.mark.parametrize("method", ["terra", "smpl", "gmr", "omniretarget"])
-def test_retargeting_consumes_provenance_bound_precomputed_terrain(tmp_path, monkeypatch, method):
+def test_retargeting_consumes_precomputed_terrain_without_run_provenance(tmp_path, monkeypatch, method):
     from terra import dataset_pipeline
 
     config_path = _write_config(
@@ -640,22 +640,12 @@ run_root = "experiment/results"
     record = MotionRecord(motion="Example/Trial01", dataset="example", source_path=source)
     assert config.terrain_source_dir is not None
     config.terrain_source_dir.mkdir(parents=True)
-    run_identity = {
-        "method": "voronoi",
-        "method_identity_sha256": "a" * 64,
-        "scientific_identity_sha256": "b" * 64,
-    }
     terrain_record = config.terrain_source_dir / "Example__Trial01.json"
     terrain_record.write_text(
         json.dumps(
             {
                 "method": "voronoi",
                 "motion": record.motion,
-                "provenance": {
-                    "schema": "terra.reconstruction-record-provenance.v1",
-                    "method_identity_sha256": "a" * 64,
-                    "scientific_identity_sha256": "b" * 64,
-                },
                 "terrain": {"boxes": []},
                 "validation": {"passed": True},
             }
@@ -663,9 +653,6 @@ run_root = "experiment/results"
     )
     terrain = SimpleNamespace(boxes=(object(),), to_dict=lambda: {"boxes": [{}]})
     seen = {}
-    published_analysis = {}
-
-    monkeypatch.setattr(dataset_pipeline, "_precomputed_run_identity", lambda *_args: run_identity)
 
     def no_reference_trajectory(*_args, **_kwargs):
         pytest.fail("Precomputed scenes must not require a reference TERRA trajectory")
@@ -702,7 +689,6 @@ run_root = "experiment/results"
     monkeypatch.setattr(dataset_pipeline, "retarget", fake_retarget)
 
     def fake_save(result, *_args, **_kwargs):
-        published_analysis.update(result.analysis)
         return SimpleNamespace(
             trajectory_path=tmp_path / "terra.npz",
             analysis_path=tmp_path / "terra_analysis.npz",
@@ -722,10 +708,6 @@ run_root = "experiment/results"
     )
     if method != "terra":
         assert seen["config"] == config.method_overrides
-    identity = published_analysis["terrain_reconstruction_source"]
-    assert identity | run_identity == identity
-    assert len(identity["record_sha256"]) == 64
-    assert published_analysis["terrain_reconstruction_source_path"] == str(terrain_record)
 
 
 def test_baseline_run_accepts_authoritative_implicit_flat_scene(tmp_path, monkeypatch):

@@ -168,7 +168,8 @@ def test_expand_and_materialize_long_selection_preserves_split_and_exact_frames(
         validated = validate_retarget_artifacts(destination, manifest_row["motion"])
         assert validated.num_frames <= 1_000
         analysis = load_retarget_analysis(validated.analysis_path)
-        assert analysis["segment_source_motion"] == row["motion"]
+        assert analysis["segment_start_frame"] == segment.start_frame
+        assert analysis["segment_end_frame_exclusive"] == segment.end_frame_exclusive
         assert "source_diagnostic" not in analysis
 
     np.testing.assert_array_equal(np.concatenate(observed), source_qpos)

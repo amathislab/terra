@@ -10,7 +10,6 @@ on dataset names.
 from __future__ import annotations
 
 import csv
-import functools
 import json
 import logging
 import os
@@ -27,7 +26,6 @@ import numpy as np
 
 from terra.api import retarget
 from terra.artifacts import (
-    load_retarget_analysis,
     retarget_cache_paths,
     save_retarget_result,
     validate_retarget_artifacts,
@@ -685,42 +683,18 @@ def _selected_terrain_family(report: dict[str, Any], terrain: object | None) -> 
     return "flat"
 
 
-@functools.cache
-def _precomputed_run_identity(source_dir: Path, expected_method: str) -> dict[str, str]:
-    """Validate one reconstruction run and return its stable scientific identity."""
-
-    from terra.benchmarking.reconstruction.provenance import validate_run_provenance
-
-    run_path = source_dir / "run.json"
-    try:
-        payload = json.loads(run_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"invalid reconstruction run JSON: {run_path}: {exc}") from exc
-    if not isinstance(payload, dict) or payload.get("method") != expected_method:
-        raise ValueError(f"reconstruction run method does not match {expected_method!r}: {run_path}")
-    provenance = validate_run_provenance(payload, run_path)
-    return {
-        "method": provenance.method,
-        "method_identity_sha256": provenance.method_identity_sha256,
-        "scientific_identity_sha256": provenance.scientific_identity_sha256,
-    }
-
-
 def _precomputed_terrain(
     config: DatasetConfig,
     record: MotionRecord,
     *,
     calibrate: bool = True,
-) -> tuple[object, dict[str, Any], dict[str, Any], dict[str, float], dict[str, str]]:
-    """Load one provenance-bound reconstruction record for retargeting."""
-
-    from terra.benchmarking.reconstruction.provenance import RECORD_PROVENANCE_SCHEMA, file_sha256
+) -> tuple[object, dict[str, Any], dict[str, Any], dict[str, float]]:
+    """Load a reconstructed terrain record for retargeting."""
 
     source_dir = config.terrain_source_dir
     expected_method = config.terrain_source_method
     if source_dir is None or expected_method is None:
         raise ValueError("precomputed terrain mode requires a source directory and method")
-    run_identity = _precomputed_run_identity(source_dir, expected_method)
     record_path = source_dir / f"{record.motion.replace('/', '__')}.json"
     if record_path.is_symlink():
         raise ValueError(f"precomputed terrain records must not be symlinks: {record_path}")
@@ -730,19 +704,10 @@ def _precomputed_terrain(
         raise ValueError(f"invalid reconstruction record JSON: {record_path}: {exc}") from exc
     if not isinstance(payload, dict):
         raise ValueError(f"reconstruction record must contain an object: {record_path}")
-    if payload.get("method") != expected_method or payload.get("motion") != record.motion:
-        raise ValueError(f"reconstruction record method/motion mismatch: {record_path}")
-    provenance = payload.get("provenance")
-    expected_provenance = {"schema": RECORD_PROVENANCE_SCHEMA} | {
-        key: run_identity[key] for key in ("method_identity_sha256", "scientific_identity_sha256")
-    }
-    if provenance != expected_provenance:
-        raise ValueError(f"reconstruction record provenance does not match its run: {record_path}")
     terrain_value = payload.get("terrain")
     if not isinstance(terrain_value, Mapping):
         raise ValueError(f"reconstruction record has no terrain object: {record_path}")
     terrain = TerrainMetadata.from_dict(terrain_value).terrain
-    identity = run_identity | {"record_sha256": file_sha256(record_path)}
     offsets: dict[str, float] = {}
     if calibrate and record.calibration_path is not None:
         joints, fps = _world_joints(config, record, record.source_path)
@@ -752,14 +717,13 @@ def _precomputed_terrain(
         "dataset_config": config.name,
         "terrain_source": "precomputed_reconstruction_record",
         "terrain_source_path": str(record_path),
-        "terrain_reconstruction_source": identity,
     }
     source_validation = payload.get("validation")
     validation = {
         "passed": None if not isinstance(source_validation, Mapping) else source_validation.get("passed"),
         "source": "precomputed_reconstruction_record",
     }
-    return terrain, report, validation, offsets, identity
+    return terrain, report, validation, offsets
 
 
 def run_motion(
@@ -822,18 +786,6 @@ def run_motion(
             method=config.method,
             env_name=config.env_name,
         )
-        if config.terrain_mode == "precomputed":
-            _terrain, _report, _validation, _offsets, expected_identity = _precomputed_terrain(
-                config,
-                record,
-                calibrate=False,
-            )
-            analysis = load_retarget_analysis(validated.analysis_path)
-            if analysis.get("terrain_reconstruction_source") != expected_identity:
-                raise ValueError(
-                    "cached retargeting artifact was produced from a different reconstructed terrain; "
-                    f"use a fresh cache root or pass --overwrite: {validated.analysis_path}"
-                )
         base.update(
             status="cached",
             trajectory_path=str(validated.trajectory_path),
@@ -855,10 +807,9 @@ def run_motion(
             )
         return base
 
-    terrain_identity: dict[str, str] | None = None
     if config.method == "terra":
         if config.terrain_mode == "precomputed":
-            terrain, report, validation, offsets, terrain_identity = _precomputed_terrain(config, record)
+            terrain, report, validation, offsets = _precomputed_terrain(config, record)
         else:
             terrain, report, validation, offsets = fit_record_terrain(config, record)
         terrain_input = terrain
@@ -868,7 +819,7 @@ def run_motion(
             overrides["source_sole_offsets"] = offsets
     else:
         if config.terrain_mode == "precomputed":
-            terrain, report, validation, _offsets, terrain_identity = _precomputed_terrain(
+            terrain, report, validation, _offsets = _precomputed_terrain(
                 config, record, calibrate=False
             )
             terrain_input = terrain
@@ -935,14 +886,6 @@ def run_motion(
             "benchmark_timing_context": benchmark_timing_context(),
             "benchmark_timing_scope": (
                 "complete terra.api.retarget call; excludes terrain reconstruction and artifact publication"
-            ),
-            **(
-                {
-                    "terrain_reconstruction_source": terrain_identity,
-                    "terrain_reconstruction_source_path": report["terrain_source_path"],
-                }
-                if terrain_identity is not None
-                else {}
             ),
         },
     )

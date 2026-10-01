@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import math
 import os
 import shutil
 from collections import defaultdict
@@ -13,12 +12,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from terra._files import atomic_write, file_sha256
+from terra._files import atomic_write
 from terra._methods import SUPPORTED_METHODS, RetargetingMethod, validate_method
 from terra._revision import write_git_commit
 from terra.artifacts import (
     RetargetSegmentRequest,
-    load_retarget_analysis,
     retarget_cache_paths,
     save_retarget_segments,
     validate_retarget_artifacts,
@@ -43,13 +41,8 @@ class _ResolvedRow:
     segment: SelectionSegment | None
 
 
-def _atomic_transfer(source: Path, destination: Path, mode: str, *, overwrite: bool) -> None:
+def _atomic_transfer(source: Path, destination: Path, mode: str) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    if destination.exists():
-        if file_sha256(destination) == file_sha256(source):
-            return
-        if not overwrite:
-            raise FileExistsError(f"destination differs from frozen source: {destination}")
     staged = destination.with_name(f".{destination.name}.tmp")
     staged.unlink(missing_ok=True)
     try:
@@ -67,8 +60,8 @@ def read_manifest(path: Path) -> list[dict[str, str]]:
 
     The required columns name each source cache and its published trajectory,
     analysis, and optional terrain path. This checks the table shape; actual
-    paths, artifact identity, terrain mode, and segment provenance are checked
-    later by :func:`materialize_subset`.
+    paths, terrain mode, and segment bounds are checked later by
+    :func:`materialize_subset`.
     """
 
     with path.open(newline="") as handle:
@@ -105,25 +98,6 @@ def _canonical_source_artifact(
         raise ValueError(f"unsafe artifact path for {motion}: {relative}")
     if (source_root / relative).resolve() != expected:
         raise ValueError(f"segmented selection {field} does not match its source artifact: {motion!r}")
-
-
-def _segment_analysis_matches(path: Path, segment: SelectionSegment) -> bool:
-    analysis = load_retarget_analysis(path)
-    expected = {
-        "segment_policy": segment.policy,
-        "segment_source_motion": segment.source_motion,
-        "segment_source_num_frames": segment.source_num_frames,
-        "segment_start_frame": segment.start_frame,
-        "segment_end_frame_exclusive": segment.end_frame_exclusive,
-        "segment_index": segment.index,
-        "segment_count": segment.count,
-    }
-    frequency = analysis.get("segment_source_frequency_hz")
-    return (
-        all(analysis.get(field) == value for field, value in expected.items())
-        and isinstance(frequency, int | float)
-        and math.isclose(float(frequency), segment.source_frequency_hz, rel_tol=1.0e-11)
-    )
 
 
 def _validate_segment_group(items: Sequence[_ResolvedRow]) -> None:
@@ -174,7 +148,6 @@ def _materialize_segment_group(
     items: Sequence[_ResolvedRow],
     destination_cache: Path,
     *,
-    overwrite: bool,
     method: RetargetingMethod,
     env_name: str,
     terrain_mode: str,
@@ -213,42 +186,9 @@ def _materialize_segment_group(
         raise ValueError(f"segmented selection omits its source terrain artifact: {segment.source_motion!r}")
 
     requests: list[RetargetSegmentRequest] = []
-    copied_by_motion: dict[str, dict[str, str]] = {}
     for item in items:
         item_segment = item.segment
         assert item_segment is not None
-        destination_paths = retarget_cache_paths(
-            destination_cache,
-            item.row["motion"],
-            method=method,
-            env_name=env_name,
-        )
-        required_outputs = [destination_paths.trajectory_path, destination_paths.analysis_path]
-        if row["terrain_relpath"]:
-            required_outputs.append(destination_paths.terrain_path)
-        existing = [path for path in required_outputs if path.exists()]
-        if existing and len(existing) != len(required_outputs) and not overwrite:
-            raise FileExistsError(f"segment artifacts are incomplete for {item.row['motion']!r}")
-        if len(existing) == len(required_outputs) and not overwrite:
-            try:
-                validated = validate_retarget_artifacts(
-                    destination_cache,
-                    item.row["motion"],
-                    method=method,
-                    env_name=env_name,
-                    require_nonflat_terrain=terrain_mode == "nonflat",
-                )
-            except (FileNotFoundError, ValueError) as error:
-                raise FileExistsError(
-                    f"existing segment artifacts are invalid for {item.row['motion']!r}"
-                ) from error
-            if (
-                validated.num_frames != item_segment.end_frame_exclusive - item_segment.start_frame
-                or not _segment_analysis_matches(validated.analysis_path, item_segment)
-            ):
-                raise FileExistsError(f"existing segment artifacts differ from the manifest: {item.row['motion']!r}")
-            copied_by_motion[item.row["motion"]] = _materialized_paths(validated)
-            continue
         requests.append(
             RetargetSegmentRequest(
                 motion_name=item.row["motion"],
@@ -260,19 +200,17 @@ def _materialize_segment_group(
             )
         )
 
-    if requests:
-        save_retarget_segments(
-            source_root,
-            segment.source_motion,
-            destination_cache,
-            requests,
-            method=method,
-            env_name=env_name,
-            overwrite=overwrite,
-        )
+    save_retarget_segments(
+        source_root,
+        segment.source_motion,
+        destination_cache,
+        requests,
+        method=method,
+        env_name=env_name,
+        overwrite=True,
+    )
+    copied_by_motion: dict[str, dict[str, str]] = {}
     for item in items:
-        if item.row["motion"] in copied_by_motion:
-            continue
         validated = validate_retarget_artifacts(
             destination_cache,
             item.row["motion"],
@@ -300,7 +238,6 @@ def materialize_subset(
     *,
     policy_root: Path | None = None,
     link_mode: str = "hardlink",
-    overwrite: bool = False,
     method: RetargetingMethod = "terra",
     env_name: str = "MyoFullBody",
     terrain_mode: str = "nonflat",
@@ -312,7 +249,7 @@ def materialize_subset(
     relative trajectory, analysis, and terrain paths. ``split`` may be
     ``train``, ``evaluation``, or ``test``; a test row retains only its
     identity. ``terrain_mode`` can require flat or non-flat terrain, or
-    accept a verified mixture. The returned JSON-compatible mapping is
+    accept a mixture. The returned JSON-compatible mapping is
     the record consumed by :func:`terra.training.prepare_training_launch`.
     """
 
@@ -374,7 +311,6 @@ def materialize_subset(
                 _materialize_segment_group(
                     items,
                     destination_cache,
-                    overwrite=overwrite,
                     method=selected_method,
                     env_name=env_name,
                     terrain_mode=terrain_mode,
@@ -388,8 +324,8 @@ def materialize_subset(
         split = item.split
         segment = item.segment
         if split == "test":
-            # Retain held-out identities in provenance without copying or
-            # validating their artifacts as part of a training launch.
+            # Record held-out motions without copying or validating their
+            # artifacts as part of a training launch.
             materialized.append(
                 {
                     "motion": row["motion"],
@@ -417,7 +353,7 @@ def materialize_subset(
                     if terrain_mode != "nonflat" and relative_field == "terrain_relpath":
                         continue
                     raise FileNotFoundError(f"source artifact is missing: {source}")
-                _atomic_transfer(source, destination, link_mode, overwrite=overwrite)
+                _atomic_transfer(source, destination, link_mode)
                 copied[relative_field] = str(destination)
         else:
             copied = segment_outputs[row["motion"]]
@@ -483,7 +419,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         default="terra",
         help="artifact namespace to materialize",
     )
-    parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--env-name", default="MyoFullBody")
     parser.add_argument(
         "--terrain-mode",
@@ -503,7 +438,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.destination_cache,
             policy_root=args.policy_root,
             link_mode=args.link_mode,
-            overwrite=args.overwrite,
             method=args.retargeting_method,
             env_name=args.env_name,
             terrain_mode=args.terrain_mode,

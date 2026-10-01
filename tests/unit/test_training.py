@@ -15,7 +15,7 @@ import pytest
 
 import terra.training as training
 from loco_mujoco.core.terrain import BoxSpec, TerrainSpec
-from terra import RETARGET_ARTIFACT_FORMAT_VERSION, retarget_cache_paths
+from terra import retarget_cache_paths
 from terra.terrain.metadata import TerrainMetadata
 from terra.training import main
 
@@ -356,11 +356,7 @@ def _write_artifacts(tmp_path: Path, *, method: str = "terra", nonflat: bool = T
     TerrainMetadata.from_terrain(terrain).save(paths.terrain_path)
     np.savez(
         paths.analysis_path,
-        artifact_format_version=np.asarray(RETARGET_ARTIFACT_FORMAT_VERSION),
-        motion_name=np.asarray("Study/Trial"),
-        retargeting_method=np.asarray(method),
-        trajectory_file=np.asarray(paths.trajectory_path.name),
-        terrain_file=np.asarray(paths.terrain_path.name),
+        pos_error=np.zeros((7, 1)),
     )
     return paths
 

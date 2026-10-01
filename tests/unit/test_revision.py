@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -35,19 +34,6 @@ def test_packaged_commit_precedes_an_unrelated_working_tree(monkeypatch, tmp_pat
     monkeypatch.setattr(revision, "_git_commit_at", lambda _path: "d" * 40)
 
     assert git_commit() == packaged
-
-
-def test_source_archive_inside_an_unrelated_git_checkout_remains_packaged(tmp_path):
-    from terra.benchmarking.reconstruction.provenance import _source_state
-
-    subprocess.run(["git", "init", str(tmp_path)], check=True, capture_output=True)
-    package = tmp_path / "archive/src/terra"
-    terrain = package / "terrain"
-    terrain.mkdir(parents=True)
-    (terrain / "fitting.py").write_text("VALUE = 1\n")
-    assert _source_state(None, package) == "packaged"
-    assert _source_state(tmp_path / "archive", package) == "packaged"
-    assert _source_state(tmp_path, package) == "dirty"
 
 
 def test_unstamped_source_copy_records_unknown_without_blocking_work(monkeypatch, tmp_path):

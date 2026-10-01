@@ -1,9 +1,9 @@
 # 3. Motion retargeting
 
-Retargeting converts a human motion into a MyoFullBody trajectory and records how the
-result was obtained. TERRA's default path estimates terrain from the motion, fits the
-robot body shape if needed, solves a terrain-aware trajectory, applies its final
-stability gate, and publishes an analysis record beside the trajectory.
+Retargeting converts a human motion into a MyoFullBody trajectory. TERRA's default
+path estimates terrain from the motion, fits the robot body shape if needed, solves a
+terrain-aware trajectory, applies its final stability gate, and publishes an analysis
+record beside the trajectory.
 
 ## Run one motion
 
@@ -47,8 +47,7 @@ $TERRA_ARTIFACT_ROOT/quickstart/
 ```
 
 The CLI prints the actual paths as JSON. The `.npz` trajectory contains state arrays for
-playback/training; `_analysis.npz` contains safe, structured run metadata and artifact
-identity. A flat result may have no `_terrain.json`. Inspect the set with the public
+playback/training; `_analysis.npz` contains structured run metadata. A flat result may have no `_terrain.json`. Inspect the set with the public
 validator:
 
 ```bash
@@ -66,8 +65,7 @@ print("non-flat:", item.nonflat_terrain)
 PY
 ```
 
-`validate_retarget_artifacts` checks artifact identity, numeric trajectory arrays, and
-terrain metadata. Use `require_nonflat_terrain=True` only for a deliberately non-flat
+`validate_retarget_artifacts` checks numeric trajectory arrays and terrain metadata. Use `require_nonflat_terrain=True` only for a deliberately non-flat
 selection; an arbitrary AMASS motion may be flat or fail the terrain fit.
 
 If automatic terrain fitting rejects a motion, read the reported contact or validation

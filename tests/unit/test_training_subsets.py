@@ -4,8 +4,6 @@ from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
-
 from terra._musclemimic import OPTIMIZED_SHAPE_FILE_NAME
 from terra.commands.materialize import materialize_subset
 from terra.commands.selection import (
@@ -412,9 +410,20 @@ def test_training_selection_can_preserve_first_artifact_for_cross_run_duplicates
     assert rows[0]["source_cache_root"] == str(nonflat_cache)
 
 
-def test_training_selection_requires_status_table(tmp_path):
-    run_root, _cache = _current_run(tmp_path, "gait120", ("Gait120/S001/ramp",))
+def test_training_selection_uses_published_manifest_without_status_table(monkeypatch, tmp_path):
+    motion = "Gait120/S001/ramp"
+    run_root, cache = _current_run(tmp_path, "gait120", (motion,))
     (run_root / "status.csv").unlink()
+    base = cache / "MyoFullBody" / "terra" / motion
+    monkeypatch.setattr(
+        "terra.commands.selection.validate_retarget_artifacts",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            trajectory_path=base.with_suffix(".npz"),
+            analysis_path=base.with_name(f"{base.name}_analysis.npz"),
+            terrain_path=None,
+            nonflat_terrain=False,
+        ),
+    )
 
-    with pytest.raises(ValueError, match="status table is missing"):
-        build_selection([run_root])
+    rows = build_selection([run_root], terrain_mode="flat")
+    assert [row["motion"] for row in rows] == [motion]

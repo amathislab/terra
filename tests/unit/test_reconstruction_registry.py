@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 import json
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -22,11 +21,6 @@ from terra.benchmarking.reconstruction.core import (
     PreparedMotion,
     ReconstructionResult,
     load_selection,
-)
-from terra.benchmarking.reconstruction.provenance import (
-    _source_commit,
-    _source_state,
-    _source_tree_sha256,
 )
 
 
@@ -50,7 +44,7 @@ class FakeMethod:
         return {"value": self.value}
 
     def prepare(self, motion: str) -> PreparedMotion:
-        return PreparedMotion({"motion": motion}, {"source": motion})
+        return PreparedMotion({"motion": motion})
 
     def fit(self, motion, prepared):
         if motion == self.fail_motion:
@@ -78,49 +72,10 @@ def test_registry_labels_terra():
     assert RECONSTRUCTION_METHODS["terra"].display_name == "TERRA"
 
 
-def test_reconstruction_source_identity_ignores_unrelated_code(tmp_path):
-    repo = tmp_path / "repo"
-    package = repo / "src/terra"
-    fitting = package / "terrain/fitting.py"
-    tracking = package / "rl/tracking.py"
-    fitting.parent.mkdir(parents=True)
-    tracking.parent.mkdir(parents=True)
-    fitting.write_text("FIT = 1\n")
-    tracking.write_text("TRACK = 1\n")
-
-    def git(*args):
-        return subprocess.check_output(["git", "-C", str(repo), *args], text=True).strip()
-
-    git("init", "-q")
-    git("add", ".")
-    git("-c", "user.name=Test", "-c", "user.email=test@example.org", "commit", "-qm", "source")
-    source_commit = _source_commit(repo, package)
-    source_hash = _source_tree_sha256(package)
-    tracking.write_text("TRACK = 2\n")
-    git("add", ".")
-    git("-c", "user.name=Test", "-c", "user.email=test@example.org", "commit", "-qm", "tracking")
-
-    assert _source_commit(repo, package) == source_commit
-    assert _source_tree_sha256(package) == source_hash
-    assert _source_state(repo, package) == "clean"
-
-    fitting.write_text("FIT = 2\n")
-    assert _source_tree_sha256(package) != source_hash
-    assert _source_state(repo, package) == "dirty"
-
-
-
-
 def test_cohort_cli_accepts_a_long_inline_options_object():
     payload = '{"config":{"max_merge_candidate_pairs":100000000},"padding":"' + "x" * 300 + '"}'
 
     assert cli._json_object(payload)["config"]["max_merge_candidate_pairs"] == 100_000_000
-
-
-
-
-
-
 
 
 def test_selection_requires_unique_canonical_collision_free_motion_ids(tmp_path):
@@ -155,7 +110,6 @@ def test_cohort_publishes_one_schema_checkpoints_failures_and_preserves_order(tm
         "method",
         "method_display_name",
         "motion",
-        "provenance",
         "terrain",
         "fit",
         "validation",
@@ -170,10 +124,7 @@ def test_cohort_publishes_one_schema_checkpoints_failures_and_preserves_order(tm
         "summary_json",
     }
     run = json.loads((output / "run.json").read_text())
-    assert run["counts"] == {"ok": 2, "cached": 0, "failed": 1}
-    assert run["provenance"]["scientific_identity_sha256"] == record["provenance"][
-        "scientific_identity_sha256"
-    ]
+    assert run["counts"] == {"ok": 2, "failed": 1}
     assert len((output / "GIT_COMMIT").read_text().strip()) == 40
 
 
@@ -194,40 +145,29 @@ def test_metric_threshold_does_not_mark_a_successful_method_as_failed(tmp_path):
     record = json.loads((output / "Study__A.json").read_text())
     assert record["validation"]["passed"] is False
     run = json.loads((output / "run.json").read_text())
-    assert run["counts"] == {"ok": 1, "cached": 0, "failed": 0}
+    assert run["counts"] == {"ok": 1, "failed": 0}
 
 
-def test_cache_reuses_complete_output_and_overwrite_is_atomic(tmp_path):
+def test_rerun_recomputes_output_and_failed_fit_preserves_existing_record(tmp_path):
     selection = _selection(tmp_path / "selection.csv", "Study/A")
     output = tmp_path / "out"
     first = run_cohort(FakeMethod(value=1), selection, output, progress=False)
     original = (output / "Study__A.json").read_bytes()
     assert first.exit_code == 0
 
-    cached = run_cohort(FakeMethod(value=1), selection, output, progress=False)
-    assert cached.records[0]["status"] == "cached"
-    assert (output / "Study__A.json").read_bytes() == original
-
-    with pytest.raises(FileExistsError, match="scientific identity"):
-        run_cohort(FakeMethod(value=2), selection, output, progress=False)
-    assert (output / "Study__A.json").read_bytes() == original
-    assert json.loads((output / "run.json").read_text())["options"] == {"value": 1}
-
-    failed_overwrite = run_cohort(
+    failed_rerun = run_cohort(
         FakeMethod(fail_motion="Study/A", value=2),
         selection,
         output,
-        overwrite=True,
         progress=False,
     )
-    assert failed_overwrite.exit_code == 2
+    assert failed_rerun.exit_code == 2
     assert (output / "Study__A.json").read_bytes() == original
 
-    replaced = run_cohort(FakeMethod(value=2), selection, output, overwrite=True, progress=False)
+    replaced = run_cohort(FakeMethod(value=2), selection, output, progress=False)
     assert replaced.exit_code == 0
     assert json.loads((output / "Study__A.json").read_text())["fit"]["value"] == 2
-
-
+    assert json.loads((output / "run.json").read_text())["options"] == {"value": 2}
 
 
 def test_cohort_cli_forwards_registered_method_inputs(monkeypatch, tmp_path):

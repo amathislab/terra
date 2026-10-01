@@ -221,7 +221,6 @@ def test_retarget_smplh_dispatches_each_method_to_its_real_adapter(monkeypatch, 
         assert terra_call[2]["fitted_shape_path"] == shape_cache_path("MyoFullBody", cache_root)
     if method != "gmr":
         assert result.analysis["fitted_shape_path"] == str(shape_cache_path("MyoFullBody", cache_root))
-        assert "fitted_shape_sha256" not in result.analysis
 
 
 def test_retarget_smplh_can_reuse_shape_outside_experiment_cache(monkeypatch, tmp_path):

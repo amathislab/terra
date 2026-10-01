@@ -54,7 +54,6 @@ def run_registered(
     *,
     dataset_config: Path | None = None,
     options: dict[str, Any] | None = None,
-    overwrite: bool = False,
 ) -> int:
     selection = load_selection(motions_path)
     method = create_method(
@@ -67,8 +66,6 @@ def run_registered(
         method,
         motions_path,
         output_dir,
-        overwrite=overwrite,
-        dataset_config_path=dataset_config,
     ).exit_code
 
 
@@ -79,7 +76,6 @@ def cohort_main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--dataset-config", type=Path)
     parser.add_argument("--options", type=_json_object, default={})
-    parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args(argv)
     try:
         return run_registered(
@@ -88,7 +84,6 @@ def cohort_main(argv: list[str] | None = None) -> int:
             args.output_dir,
             dataset_config=args.dataset_config,
             options=args.options,
-            overwrite=args.overwrite,
         )
     except (FileNotFoundError, OSError, TypeError, ValueError) as error:
         parser.error(str(error))

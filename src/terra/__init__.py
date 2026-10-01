@@ -29,7 +29,6 @@ _EXPORTS = {
     ),
     **_export_group(
         "terra.artifacts",
-        "RETARGET_ARTIFACT_FORMAT_VERSION",
         "RetargetArtifacts",
         "RetargetPaths",
         "ValidatedRetargetArtifacts",
@@ -60,7 +59,6 @@ if TYPE_CHECKING:
     from terra._methods import SUPPORTED_METHODS, RetargetingMethod
     from terra.api import TerrainInput, retarget, retarget_c3d, retarget_mat, retarget_smplh, retarget_trc
     from terra.artifacts import (
-        RETARGET_ARTIFACT_FORMAT_VERSION,
         RetargetArtifacts,
         RetargetPaths,
         ValidatedRetargetArtifacts,

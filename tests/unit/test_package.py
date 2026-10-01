@@ -19,7 +19,6 @@ def test_root_all_advertises_only_the_stable_file_oriented_api():
         "ARTIFACT_ROOT_ENV",
         "DATA_ROOT_ENV",
         "MODEL_ROOT_ENV",
-        "RETARGET_ARTIFACT_FORMAT_VERSION",
         "SUPPORTED_METHODS",
         "RetargetArtifacts",
         "RetargetPaths",

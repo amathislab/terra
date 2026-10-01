@@ -11,7 +11,7 @@ from dataclasses import asdict, dataclass
 from itertools import pairwise
 from pathlib import Path
 
-from terra._files import atomic_write, file_sha256
+from terra._files import atomic_write
 from terra._methods import RetargetingMethod, validate_method
 from terra._revision import write_git_commit
 from terra.artifacts import validate_retarget_artifacts
@@ -46,7 +46,7 @@ class TemporalSegment:
 
 @dataclass(frozen=True, slots=True)
 class SelectionSegment:
-    """Validated segment provenance encoded in one selection-manifest row."""
+    """Selected frame interval encoded in a training-selection row."""
 
     source_motion: str
     start_frame: int
@@ -399,9 +399,7 @@ def publish_segmented_selection(
     atomic_write(destination, write_csv)
     payload = dict(audit) | {
         "source_selection": str(source),
-        "source_selection_sha256": file_sha256(source),
         "selection": str(destination),
-        "selection_sha256": file_sha256(destination),
     }
     atomic_write(
         resolved_audit,

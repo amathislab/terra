@@ -71,8 +71,9 @@ column also works.
 `$TERRA_ARTIFACT_ROOT/reconstruction/terra/` contains one
 `<motion-id-with-slashes-replaced-by-__>.json` per successful fit, plus `status.csv` and
 `run.json`. The per-motion JSON has `terrain`, `fit`, and `validation` sections.
-`status.csv` records `ok`, `cached`, or `failed` for every selected motion and an
-error message for failures. Start there if the command exits nonzero; failed fits remain
+`status.csv` records `ok` or `failed` for every selected motion and an
+error message for failures. Rerunning the command refits selected motions and replaces
+their JSON records. Start there if the command exits nonzero; failed fits remain
 visible in the selected denominator.
 
 ```bash

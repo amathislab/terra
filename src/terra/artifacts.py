@@ -26,7 +26,6 @@ if TYPE_CHECKING:
     from terra.contracts import RetargetResult
     from terra.terrain.metadata import TerrainMetadata
 
-RETARGET_ARTIFACT_FORMAT_VERSION = 2
 _ANALYSIS_JSON_PREFIX = "__terra_json__:"
 # Spaces occur in a small number of source AMASS clip names (notably EyesJapan).
 # They are portable filename characters and Path handles them without shell parsing, so
@@ -111,16 +110,6 @@ class ValidatedRetargetArtifacts:
     nonflat_terrain: bool
 
 
-@dataclass(frozen=True)
-class _ArtifactManifest:
-    """Typed artifact identity stored in an analysis archive."""
-
-    motion_name: str
-    method: RetargetingMethod
-    trajectory_file: str
-    terrain_file: str | None
-
-
 def normalize_motion_name(name: str | Path) -> Path:
     """Return a validated portable identifier for use inside trajectory caches.
 
@@ -195,54 +184,6 @@ def load_retarget_analysis(path: str | Path) -> dict[str, object]:
         return {name: _decode_analysis_value(archive[name]) for name in archive.files}
 
 
-def _manifest_from_analysis(analysis: Mapping[str, object], analysis_path: Path) -> _ArtifactManifest:
-    version = analysis.get("artifact_format_version")
-    if version != RETARGET_ARTIFACT_FORMAT_VERSION:
-        raise ValueError(f"unsupported or missing artifact format version: {analysis_path}")
-
-    motion_name = _manifest_text(analysis, "motion_name", analysis_path)
-    method = validate_method(_manifest_text(analysis, "retargeting_method", analysis_path))
-    trajectory_file = _manifest_filename(analysis, "trajectory_file", analysis_path)
-
-    terrain_file_value = analysis.get("terrain_file")
-    terrain_file = None if terrain_file_value is None else _manifest_filename(analysis, "terrain_file", analysis_path)
-    return _ArtifactManifest(
-        motion_name=motion_name,
-        method=method,
-        trajectory_file=trajectory_file,
-        terrain_file=terrain_file,
-    )
-
-
-def _manifest_text(analysis: Mapping[str, object], field: str, analysis_path: Path) -> str:
-    value = analysis.get(field)
-    if not isinstance(value, str) or not value:
-        raise ValueError(f"analysis {field} must be a non-empty string: {analysis_path}")
-    return value
-
-
-def _manifest_filename(analysis: Mapping[str, object], field: str, analysis_path: Path) -> str:
-    value = _manifest_text(analysis, field, analysis_path)
-    if value in {".", ".."} or "/" in value or "\\" in value:
-        raise ValueError(f"analysis {field} must be a relative filename: {analysis_path}")
-    return value
-
-
-def _validate_manifest_identity(
-    manifest: _ArtifactManifest,
-    paths: RetargetPaths,
-    method: RetargetingMethod,
-) -> None:
-    if manifest.motion_name != paths.motion_name:
-        raise ValueError(f"analysis motion name does not match its cache path: {paths.analysis_path}")
-    if manifest.method != method:
-        raise ValueError(f"analysis was published by {manifest.method!r}, expected {method!r}")
-    if manifest.trajectory_file != paths.trajectory_path.name:
-        raise ValueError(f"analysis trajectory filename does not match its cache path: {paths.analysis_path}")
-    if manifest.terrain_file is not None and manifest.terrain_file != paths.terrain_path.name:
-        raise ValueError(f"analysis terrain filename does not match its cache path: {paths.analysis_path}")
-
-
 def validate_retarget_artifacts(
     cache_root: str | Path,
     motion_name: str | Path,
@@ -255,8 +196,7 @@ def validate_retarget_artifacts(
 
     ``cache_root`` is the directory passed to :func:`save_retarget_result`;
     ``motion_name`` is its portable relative identifier, not a file path.
-    The read side checks method and manifest identity, safely validates the
-    trajectory arrays, and loads any declared terrain metadata. A flat result
+    The read side safely validates trajectory arrays and loads any terrain metadata. A flat result
     may have no terrain file. Set ``require_nonflat_terrain=True`` only when
     the selected cohort must have reconstructed non-flat support.
 
@@ -265,7 +205,7 @@ def validate_retarget_artifacts(
 
     Raises:
         FileNotFoundError: If a required artifact is absent.
-        ValueError: If identity, trajectory arrays, or terrain are invalid.
+        ValueError: If trajectory arrays or terrain are invalid.
     """
 
     from terra.terrain.metadata import TerrainMetadata
@@ -280,20 +220,15 @@ def validate_retarget_artifacts(
         rendered = ", ".join(str(path) for path in missing)
         raise FileNotFoundError(f"retargeted artifact(s) not found: {rendered}")
 
-    manifest = _manifest_from_analysis(load_retarget_analysis(paths.analysis_path), paths.analysis_path)
-    _validate_manifest_identity(manifest, paths, selected_method)
+    load_retarget_analysis(paths.analysis_path)
 
     num_frames, frequency, qpos_dimension, qvel_dimension = _validate_trajectory_archive(paths.trajectory_path)
 
     terrain_path = None
     terrain = None
-    if manifest.terrain_file is not None:
-        if not paths.terrain_path.is_file():
-            raise FileNotFoundError(f"retargeted terrain artifact not found: {paths.terrain_path}")
+    if paths.terrain_path.is_file():
         terrain = TerrainMetadata.load(paths.terrain_path).terrain
         terrain_path = paths.terrain_path
-    elif paths.terrain_path.exists():
-        raise ValueError(f"terrain metadata is not listed in the analysis: {paths.terrain_path}")
 
     nonflat_terrain = terrain is not None and not terrain.is_flat
     if require_nonflat_terrain and not nonflat_terrain:
@@ -324,9 +259,9 @@ def save_retarget_result(
 
     ``motion_name`` is a portable relative ID such as ``Study/Trial``.
     This writes ``MyoFullBody/<method>/<motion>.npz``, a paired
-    ``_analysis.npz`` manifest, and optional ``_terrain.json`` under
+    ``_analysis.npz`` report, and optional ``_terrain.json`` under
     ``cache_root``. Flat results may omit the terrain file. Files are staged
-    and validated before publication; the manifest is committed last, and an
+    and validated before publication; the analysis is committed last, and an
     interrupted replacement restores the preceding set. Analysis archives
     never require pickle deserialization.
 
@@ -353,7 +288,6 @@ def save_retarget_result(
 
     analysis = dict(result.analysis)
     for field in (
-        "artifact_format_version",
         "motion_name",
         "retargeting_method",
         "terrain",
@@ -363,13 +297,6 @@ def save_retarget_result(
         "trajectory_path",
     ):
         analysis.pop(field, None)
-    analysis = {key: value for key, value in analysis.items() if not key.casefold().endswith("_sha256")}
-    analysis.update(
-        artifact_format_version=RETARGET_ARTIFACT_FORMAT_VERSION,
-        motion_name=paths.motion_name,
-        source_path=str(result.source_path),
-        retargeting_method=result.method,
-    )
     _encode_analysis(analysis)
 
     with ExitStack() as staging:
@@ -383,20 +310,12 @@ def save_retarget_result(
         if terrain_metadata is not None:
             staged_terrain = staging.enter_context(staged_write(paths.terrain_path, terrain_metadata.save))
             terrain_path = paths.terrain_path
-            analysis["terrain_file"] = paths.terrain_path.name
 
-        analysis["trajectory_file"] = paths.trajectory_path.name
         encoded_analysis = _encode_analysis(analysis)
         staged_analysis = staging.enter_context(
             staged_write(paths.analysis_path, lambda path: np.savez(path, **encoded_analysis))
         )
-        _validate_staged_manifest(
-            staged_analysis,
-            paths,
-            staged_trajectory,
-            staged_terrain,
-            result.method,
-        )
+        _validate_staged_artifacts(staged_analysis, staged_trajectory, staged_terrain)
         operations = [(paths.trajectory_path, staged_trajectory)]
         if staged_terrain is not None:
             operations.append((paths.terrain_path, staged_terrain))
@@ -476,7 +395,6 @@ def _validate_segment_request(request: RetargetSegmentRequest, source_num_frames
 def _save_loaded_retarget_segment(
     source: ValidatedRetargetArtifacts,
     source_values: Mapping[str, np.ndarray],
-    original_source_path: str,
     destination_cache_root: str | Path,
     request: RetargetSegmentRequest,
     *,
@@ -494,17 +412,6 @@ def _save_loaded_retarget_segment(
         raise FileExistsError(f"retargeted segment artifact(s) already exist: {rendered}")
 
     analysis: dict[str, object] = {
-        "artifact_format_version": RETARGET_ARTIFACT_FORMAT_VERSION,
-        "motion_name": paths.motion_name,
-        "source_path": original_source_path,
-        "retargeting_method": method,
-        "trajectory_file": paths.trajectory_path.name,
-        "segment_policy": request.segment_policy,
-        "segment_source_motion": source.motion_name,
-        "segment_source_trajectory_file": source.trajectory_path.name,
-        "segment_source_analysis_file": source.analysis_path.name,
-        "segment_source_num_frames": source.num_frames,
-        "segment_source_frequency_hz": source.frequency,
         "segment_start_frame": request.start_frame,
         "segment_end_frame_exclusive": request.end_frame_exclusive,
         "segment_index": request.segment_index,
@@ -512,9 +419,6 @@ def _save_loaded_retarget_segment(
         "segment_frames": request.end_frame_exclusive - request.start_frame,
         "segment_duration_s": (request.end_frame_exclusive - request.start_frame) / source.frequency,
     }
-    if source.terrain_path is not None:
-        analysis["terrain_file"] = paths.terrain_path.name
-
     with ExitStack() as staging:
         staged_trajectory = staging.enter_context(
             staged_write(
@@ -539,13 +443,7 @@ def _save_loaded_retarget_segment(
         staged_analysis = staging.enter_context(
             staged_write(paths.analysis_path, lambda path: np.savez(path, **encoded_analysis))
         )
-        _validate_staged_manifest(
-            staged_analysis,
-            paths,
-            staged_trajectory,
-            staged_terrain,
-            method,
-        )
+        _validate_staged_artifacts(staged_analysis, staged_trajectory, staged_terrain)
         operations = [(paths.trajectory_path, staged_trajectory)]
         if staged_terrain is not None:
             operations.append((paths.terrain_path, staged_terrain))
@@ -587,15 +485,10 @@ def save_retarget_segments(
     for request in requests:
         _validate_segment_request(request, source.num_frames)
     source_values = _load_segment_source_archive(source.trajectory_path, source.num_frames)
-    source_analysis = load_retarget_analysis(source.analysis_path)
-    original_source_path = source_analysis.get("source_path")
-    if not isinstance(original_source_path, str) or not original_source_path:
-        original_source_path = str(source.trajectory_path)
     artifacts = tuple(
         _save_loaded_retarget_segment(
             source,
             source_values,
-            original_source_path,
             destination_cache_root,
             request,
             method=selected_method,
@@ -627,9 +520,8 @@ def save_retarget_segment(
 
     The trajectory's time-indexed arrays are sliced without recomputing any
     kinematics. Static model data and the paired terrain remain byte-for-byte
-    equivalent to the source. The derived analysis archive contains explicit
-    provenance instead of copying source-wide retargeting diagnostics that no
-    longer describe the shorter interval.
+    equivalent to the source. The derived analysis archive describes the selected
+    frame interval.
     """
 
     return save_retarget_segments(
@@ -652,20 +544,15 @@ def save_retarget_segment(
     )[0]
 
 
-def _validate_staged_manifest(
+def _validate_staged_artifacts(
     analysis_path: Path,
-    paths: RetargetPaths,
     trajectory_path: Path,
     terrain_path: Path | None,
-    method: RetargetingMethod,
 ) -> None:
     """Read back staged files and verify them before publication."""
 
-    manifest = _manifest_from_analysis(load_retarget_analysis(analysis_path), analysis_path)
-    _validate_manifest_identity(manifest, paths, method)
+    load_retarget_analysis(analysis_path)
     _validate_trajectory_archive(trajectory_path)
-    if (manifest.terrain_file is None) != (terrain_path is None):
-        raise ValueError(f"staged analysis has incomplete terrain metadata: {analysis_path}")
     if terrain_path is not None:
         from terra.terrain.metadata import TerrainMetadata
 
@@ -771,7 +658,6 @@ def _result_terrain_metadata(result: RetargetResult) -> TerrainMetadata | None:
 
 
 __all__ = [
-    "RETARGET_ARTIFACT_FORMAT_VERSION",
     "RetargetArtifacts",
     "RetargetPaths",
     "RetargetSegmentRequest",

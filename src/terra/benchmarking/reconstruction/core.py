@@ -1,9 +1,7 @@
 """Common terrain-reconstruction execution and publication utilities.
 
-Reconstruction methods own only scientific preparation and fitting. This module owns
-the cohort denominator, cache validation, atomic record publication, and status
-checkpoints. Records from every registered method therefore use the same layout and
-cache behavior.
+Reconstruction methods own scientific preparation and fitting. This module runs a
+selected cohort and publishes fit records and status checkpoints.
 """
 
 from __future__ import annotations
@@ -20,8 +18,6 @@ from typing import Any, Protocol, runtime_checkable
 from terra._files import atomic_write
 from terra._revision import write_git_commit
 from terra.artifacts import normalize_motion_name
-
-from .provenance import RECORD_PROVENANCE_SCHEMA, build_run_provenance
 
 STATUS_FIELDS = (
     "motion",
@@ -121,10 +117,9 @@ def load_selection(path: Path) -> Selection:
 
 @dataclass(frozen=True)
 class PreparedMotion:
-    """Opaque method state plus JSON-compatible inputs for the fit report."""
+    """Opaque method state used by the terrain fitter."""
 
     state: object
-    input: Mapping[str, Any]
 
 
 @dataclass(frozen=True)
@@ -175,52 +170,15 @@ def _record(
     method: ReconstructionMethod,
     motion: str,
     result: ReconstructionResult,
-    provenance: Mapping[str, Any],
 ) -> dict[str, Any]:
     return {
         "method": method.name,
         "method_display_name": method.display_name,
         "motion": motion,
-        "provenance": {
-            "schema": RECORD_PROVENANCE_SCHEMA,
-            "method_identity_sha256": provenance["method_identity_sha256"],
-            "scientific_identity_sha256": provenance["scientific_identity_sha256"],
-        },
         "terrain": dict(result.terrain),
         "fit": dict(result.fit),
         "validation": dict(result.validation),
     }
-
-
-def cached_record(
-    path: Path,
-    method: ReconstructionMethod,
-    motion: str,
-    provenance: Mapping[str, Any],
-) -> dict[str, Any] | None:
-    if path.is_symlink():
-        return None
-    try:
-        record = json.loads(path.read_text())
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        return None
-    if not isinstance(record, dict):
-        return None
-    if record.get("method") != method.name:
-        return None
-    if record.get("motion") != motion:
-        return None
-    expected_provenance = {
-        "schema": RECORD_PROVENANCE_SCHEMA,
-        "method_identity_sha256": provenance["method_identity_sha256"],
-        "scientific_identity_sha256": provenance["scientific_identity_sha256"],
-    }
-    if record.get("provenance") != expected_provenance:
-        return None
-    scientific_result = {key: record.get(key) for key in ("terrain", "fit", "validation")}
-    if not all(isinstance(value, dict) for value in scientific_result.values()):
-        return None
-    return record
 
 
 def _status_row(
@@ -262,10 +220,7 @@ def run_cohort(
     selection_path: Path,
     output_dir: Path,
     *,
-    overwrite: bool = False,
     repo_root: Path | None = None,
-    dataset_config_path: Path | None = None,
-    matrix_path: Path | None = None,
     progress: bool = True,
 ) -> CohortResult:
     """Run one registered method over one immutable ordered denominator."""
@@ -273,26 +228,6 @@ def run_cohort(
     selection = load_selection(selection_path)
     output_root = output_dir.expanduser().resolve()
     outputs = {motion: output_root / f"{motion.replace('/', '__')}.json" for motion in selection.motions}
-    provenance = build_run_provenance(
-        method.name,
-        method.options,
-        selection.path,
-        dataset_config_path=dataset_config_path,
-        matrix_path=matrix_path,
-        repo_root=repo_root,
-    )
-    reusable: dict[str, dict[str, Any]] = {}
-    if not overwrite:
-        for motion, output in outputs.items():
-            if not (output.exists() or output.is_symlink()):
-                continue
-            existing = cached_record(output, method, motion, provenance)
-            if existing is None:
-                raise FileExistsError(
-                    "existing output does not match the current scientific identity: "
-                    f"{output}; use a fresh output root or pass --overwrite"
-                )
-            reusable[motion] = existing
     write_git_commit(output_root, repo_root=repo_root)
     status_path = output_root / "status.csv"
     rows: dict[str, dict[str, str]] = {}
@@ -300,26 +235,14 @@ def run_cohort(
         started = time.perf_counter()
         output = outputs[motion]
         try:
-            existing = reusable.get(motion)
-            if existing is None:
-                prepared = method.prepare(motion)
-                result = method.fit(motion, prepared)
-                record = _record(method, motion, result, provenance)
-                atomic_json(output, record)
-                state = "ok"
-                summary = method.summarize(result)
-            else:
-                state = "cached"
-                result = ReconstructionResult(
-                    terrain=existing["terrain"],
-                    fit=existing["fit"],
-                    validation=existing["validation"],
-                )
-                summary = method.summarize(result)
+            prepared = method.prepare(motion)
+            result = method.fit(motion, prepared)
+            atomic_json(output, _record(method, motion, result))
+            summary = method.summarize(result)
             row = _status_row(
                 motion=motion,
                 method=method,
-                status=state,
+                status="ok",
                 output=output,
                 elapsed=time.perf_counter() - started,
                 summary=summary,
@@ -343,9 +266,8 @@ def run_cohort(
         "selection": str(selection.path),
         "motions": len(selection.motions),
         "status": str(status_path),
-        "counts": {state: sum(row["status"] == state for row in rows.values()) for state in ("ok", "cached", "failed")},
-        "options": provenance["method_identity"]["resolved_options"],
-        "provenance": provenance,
+        "counts": {state: sum(row["status"] == state for row in rows.values()) for state in ("ok", "failed")},
+        "options": dict(method.options),
     }
     atomic_json(output_root / "run.json", run_payload)
     return CohortResult(method.name, status_path, tuple(rows[motion] for motion in selection.motions))

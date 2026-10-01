@@ -52,7 +52,7 @@ def test_c3d_cli_forwards_explicit_assets_and_publishes_named_motion(monkeypatch
                 "--config",
                 str(method_config),
                 "--c3d-options",
-                str(c3d_options),
+                '{"stage2_iters":12}',
             ]
         )
         == 0
@@ -301,3 +301,10 @@ def test_cli_requires_mat_schema(tmp_path, capsys):
 def test_mat_selector_requires_name_and_integer_index(value):
     with pytest.raises(Exception, match="MAT selector"):
         cli._mat_selector(value)
+
+
+def test_inline_json_method_and_marker_options_are_accepted():
+    assert cli._load_json_object('{"step_size":0.1}', "method config") == {"step_size": 0.1}
+    assert cli._load_json_object('{"surface_model_type":"smplh"}', "marker options") == {
+        "surface_model_type": "smplh"
+    }

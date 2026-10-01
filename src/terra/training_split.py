@@ -160,12 +160,15 @@ def assign_stratified_splits(
     *,
     holdout_fraction: float = DEFAULT_TEST_FRACTION,
     seed: str = DEFAULT_SPLIT_SEED,
+    holdout_label: str = "test",
 ) -> list[dict[str, str]]:
-    """Assign identity-disjoint train/test labels balanced by dataset and type."""
+    """Assign identity-disjoint train/holdout labels balanced by dataset and type."""
     if not 0.0 < holdout_fraction < 0.5:
         raise ValueError("holdout_fraction must be greater than 0 and less than 0.5")
     if not seed:
         raise ValueError("split seed must be non-empty")
+    if holdout_label not in {"test", "evaluation"}:
+        raise ValueError("holdout_label must be test or evaluation")
     if not rows:
         raise ValueError("cannot split an empty motion cohort")
 
@@ -200,9 +203,39 @@ def assign_stratified_splits(
     for row in rows:
         item = dict(row)
         item["motion_type"] = canonical_motion_type(row)
-        item["split"] = "test" if split_identity(item["motion"]) in test_groups else "train"
+        item["split"] = holdout_label if split_identity(item["motion"]) in test_groups else "train"
         output.append(item)
     return output
+
+
+def assign_training_splits(
+    rows: Sequence[Mapping[str, str]],
+    *,
+    evaluation_fraction: float | None = None,
+    test_fraction: float | None = None,
+    seed: str = DEFAULT_SPLIT_SEED,
+) -> list[dict[str, str]]:
+    """Assign disjoint training, validation, and optional final-test identities."""
+    if evaluation_fraction is None and test_fraction is None:
+        return [dict(row) for row in rows]
+    if evaluation_fraction is not None and test_fraction is not None and evaluation_fraction + test_fraction >= 0.5:
+        raise ValueError("evaluation_fraction and test_fraction must sum to less than 0.5")
+    selected = [dict(row) for row in rows]
+    if test_fraction is not None:
+        selected = assign_stratified_splits(selected, holdout_fraction=test_fraction, seed=seed)
+    if evaluation_fraction is not None:
+        remaining = [row for row in selected if row.get("split", "train") == "train"]
+        fraction_of_remaining = evaluation_fraction / (1.0 - (test_fraction or 0.0))
+        evaluated = assign_stratified_splits(
+            remaining,
+            holdout_fraction=fraction_of_remaining,
+            seed=f"{seed}:evaluation",
+            holdout_label="evaluation",
+        )
+        by_motion = {row["motion"]: row for row in evaluated}
+        selected = [by_motion.get(row["motion"], row) for row in selected]
+    split_audit(selected)
+    return selected
 
 
 def split_audit(rows: Sequence[Mapping[str, str]]) -> dict[str, object]:
@@ -241,6 +274,7 @@ __all__ = [
     "DEFAULT_SPLIT_SEED",
     "DEFAULT_TEST_FRACTION",
     "assign_stratified_splits",
+    "assign_training_splits",
     "canonical_motion_type",
     "split_audit",
     "split_identity",

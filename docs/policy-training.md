@@ -71,7 +71,8 @@ train on.
 
 This one-motion selection has only a training split, so the launcher also uses it for
 startup validation. For a real experiment, select a larger, diverse training set and
-a separate evaluation split before segmentation. Keep source identities and their segments in the same split when building a larger
+a separate evaluation split with `terra train select --evaluation-fraction` before
+segmentation. Keep source identities and their segments in the same split when building a larger
 cohort. Record the selection and materialization report alongside each training run.
 
 ## Check CUDA, then run one update
@@ -82,7 +83,7 @@ require a working JAX CUDA device:
 ```bash
 uv sync --locked --python 3.11 --extra cuda
 source .venv/bin/activate
-terra train preflight --multi-motion
+terra train preflight
 python scripts/terra/train_smoke.py \
   --materialization-record "$TERRA_ARTIFACT_ROOT/training/materialization.json" \
   --output "$TERRA_ARTIFACT_ROOT/training/smoke"
@@ -109,7 +110,7 @@ terra train run \
 ```
 
 For a full experiment, build a diverse, verified cohort with a separate evaluation
-split, inspect the dry-run output, and rerun without `--dry-run`. Tune the configuration
-to available GPU memory and keep the materialization record, run configuration, and
+split created by `terra train select --evaluation-fraction`, inspect the dry-run
+output, and rerun without `--dry-run`. Tune the configuration to available GPU memory and keep the materialization record, run configuration, and
 checkpoints together. The one-update smoke test checks startup only; it does not
 establish task performance.

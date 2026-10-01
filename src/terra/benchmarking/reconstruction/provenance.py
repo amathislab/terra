@@ -201,7 +201,7 @@ def validate_run_provenance(run: Mapping[str, Any], path: Path) -> ValidatedRunP
     required_source = {"git_commit", "state", "tree_sha256"}
     if set(source) != required_source or any(not isinstance(source[key], str) for key in required_source):
         raise ValueError(f"reconstruction source identity is incomplete: {path}")
-    if _GIT_COMMIT.fullmatch(source["git_commit"]) is None:
+    if source["git_commit"] != "unknown" and _GIT_COMMIT.fullmatch(source["git_commit"]) is None:
         raise ValueError(f"reconstruction source Git commit is invalid: {path}")
     if source["state"] not in {"clean", "dirty", "packaged"}:
         raise ValueError(f"reconstruction source state is invalid: {path}")

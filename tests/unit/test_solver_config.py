@@ -134,3 +134,18 @@ def test_solve_context_rejects_out_of_order_stage_transition():
     context.advance(SolveStage.PREPARED, SolveStage.CONSTRAINTS_ATTACHED)
     with pytest.raises(RuntimeError, match="invalid solver stage transition"):
         context.advance(SolveStage.PREPARED, SolveStage.SOLVED)
+
+
+def test_public_default_weights_match_the_frozen_terrain_profile():
+    from terra import defaults
+    from terra.profiles import FROZEN_TERRA_TERRAIN_PROFILE
+
+    pairs = {
+        "orient_weight": defaults.DEFAULT_ORIENT_WEIGHT,
+        "foot_anchor_weight": defaults.DEFAULT_FOOT_ANCHOR_WEIGHT,
+        "foot_velocity_weight": defaults.DEFAULT_FOOT_VELOCITY_WEIGHT,
+        "foot_velocity_tracking_weight": defaults.DEFAULT_FOOT_VELOCITY_TRACKING_WEIGHT,
+        "stance_height_weight": defaults.DEFAULT_STANCE_HEIGHT_WEIGHT,
+        "coupler_weight": defaults.DEFAULT_COUPLER_WEIGHT,
+    }
+    assert pairs == {key: FROZEN_TERRA_TERRAIN_PROFILE[key] for key in pairs}

@@ -380,8 +380,10 @@ def training_preflight(
     algorithm: str = "ppo",
     require_cuda: bool = True,
     multi_motion: bool | None = None,
+    overrides: Sequence[str] = (),
+    environment: Mapping[str, str] | None = None,
 ) -> TrainingPreflight:
-    """Validate a canonical TERRA training config and its CUDA runtimes.
+    """Validate the selected TERRA training config and its CUDA runtimes.
 
     Set ``require_cuda=False`` only for CPU CI and installation diagnostics. It
     validates the same configuration and software stack but reports unavailable
@@ -396,11 +398,10 @@ def training_preflight(
         multi_motion = algorithm_key == "ppo"
     config_name = _training_config_name(algorithm_key, multi_motion=multi_motion)
     config_path = _config_path(config_name)
-    config = _compose_training_config(algorithm=algorithm_key, multi_motion=multi_motion)
-    resolved_algorithm = _validate_training_config(config, algorithm=algorithm_key, config_name=config_name)
-    configured_devices = 1
-    if multi_motion:
-        configured_devices = int(config.experiment.distributed.num_devices)
+    with _temporary_environment(environment or {}):
+        config = _compose_training_config(overrides=overrides, algorithm=algorithm_key, multi_motion=multi_motion)
+        resolved_algorithm = _validate_training_config(config, algorithm=algorithm_key, config_name=config_name)
+        configured_devices = int(config.experiment.distributed.num_devices) if multi_motion else 1
 
     with _quiet_accelerator_probe():
         try:
@@ -702,7 +703,8 @@ def launch_training(launch: TrainingLaunch) -> int:
     training_preflight(
         algorithm=launch.algorithm_key,
         require_cuda=True,
-        multi_motion=isinstance(launch, TrainingLaunch),
+        overrides=launch.command[4:],
+        environment=launch.environment,
     )
     environment = os.environ.copy()
     if "TERRA_MOTION_SELECTION_RECORD" in launch.environment:
@@ -711,15 +713,9 @@ def launch_training(launch: TrainingLaunch) -> int:
         # making a large-cohort exec fail with E2BIG.
         environment.pop("TERRA_MOTIONS", None)
         environment.pop("TERRA_VALIDATION_MOTIONS", None)
-    if isinstance(launch, TrainingLaunch):
-        # These values are consumed when the child imports JAX. Keep a direct
-        # CLI launch on the same allocator partition as the RunAI path while
-        # respecting deliberate operator overrides.
-        environment.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "true")
-        environment.setdefault(
-            "XLA_PYTHON_CLIENT_MEM_FRACTION",
-            "0.5",
-        )
+    # These values are consumed when the child imports JAX. Respect operator overrides.
+    environment.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "true")
+    environment.setdefault("XLA_PYTHON_CLIENT_MEM_FRACTION", "0.5")
     environment.update(launch.environment)
     completed = subprocess.run(launch.command, env=environment, check=False)
     return int(completed.returncode)
@@ -744,17 +740,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="report config/software readiness without requiring local CUDA hardware",
     )
-    parser.add_argument(
-        "--multi-motion",
-        action="store_true",
-        help="validate the materialized-selection configuration",
-    )
     args = parser.parse_args(argv)
     try:
         report = training_preflight(
             algorithm=args.algorithm,
             require_cuda=False,
-            multi_motion=args.multi_motion or args.algorithm == "ppo",
+            multi_motion=True,
         )
     except (OSError, RuntimeError, ValueError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
@@ -805,7 +796,14 @@ def run_main(argv: Sequence[str] | None = None) -> int:
         )
         if args.dry_run:
             payload = asdict(launch)
-            payload["preflight"] = asdict(training_preflight(require_cuda=False))
+            payload["preflight"] = asdict(
+                training_preflight(
+                    algorithm=launch.algorithm_key,
+                    require_cuda=False,
+                    overrides=launch.command[4:],
+                    environment=launch.environment,
+                )
+            )
             print(json.dumps(payload, indent=2, default=str))
             return 0
         return launch_training(launch)

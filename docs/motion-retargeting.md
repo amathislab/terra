@@ -124,7 +124,7 @@ Set `cache_root` on both calls if you want the fitted shape and artifacts togeth
 
 `--method` accepts `terra`, `omniretarget`, `gmr`, and `smpl`. GMR needs the
 `baselines` extra. Only TERRA and OmniRetarget can infer terrain from `auto`; for the
-others use `--terrain none` or an explicit terrain JSON. `--config` takes a JSON object
+others use `--terrain none` or an explicit terrain JSON. `--config` takes an inline JSON object or a JSON file
 of method-specific overrides. Start with the defaults, then save the exact options and
 input selection used for a larger cohort.
 

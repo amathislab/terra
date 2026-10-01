@@ -384,7 +384,13 @@ def test_prism_export_produces_smplh_motion_only(tmp_path):
     with source.open("wb") as handle:
         pickle.dump(take, handle)
 
+    take["smpl_params"]["poses"][:, 66:72] = 1.0
+    with source.open("wb") as handle:
+        pickle.dump(take, handle)
     row = export_take(source, tmp_path / "converted", overwrite=False)
+    with np.load(Path(str(row["output_path"]))) as archive:
+        assert archive["poses"].shape == (frames, 156)
+        np.testing.assert_array_equal(archive["poses"][:, 66:], 0.0)
     motion = load_smplh_motion(Path(str(row["output_path"])))
 
     assert motion["pose_aa"].shape == (frames, 72)

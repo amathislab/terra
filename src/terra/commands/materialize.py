@@ -157,6 +157,8 @@ def _validate_segment_group(items: Sequence[_ResolvedRow]) -> None:
         segment.source_num_frames,
         segment.source_frequency_hz,
         segment.policy,
+        segment.trigger_seconds,
+        segment.maximum_segment_seconds,
     )
     for item in items:
         current = item.segment
@@ -171,6 +173,8 @@ def _validate_segment_group(items: Sequence[_ResolvedRow]) -> None:
             current.source_num_frames,
             current.source_frequency_hz,
             current.policy,
+            current.trigger_seconds,
+            current.maximum_segment_seconds,
         ) != expected_segment_values:
             raise ValueError(f"sibling segments have inconsistent temporal metadata: {segment.source_motion!r}")
 

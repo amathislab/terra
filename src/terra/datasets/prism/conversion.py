@@ -61,7 +61,9 @@ def export_take(path: Path, output_root: Path, *, overwrite: bool) -> dict[str, 
     if not np.isfinite(fps) or fps <= 0:
         raise ValueError(f"invalid PRISM frame rate {fps}")
     pose_smplh = np.zeros((len(poses), 156), dtype=np.float32)
-    pose_smplh[:, :72] = poses
+    # SMPL has 23 body joints; SMPL-H has 21 before its separate finger joints.
+    # The final two SMPL hand rotations must not spill into SMPL-H finger slots.
+    pose_smplh[:, :66] = poses[:, :66]
     betas = _constant_betas(params["betas"], len(poses))
     gender = str(params["gender"]).strip().casefold()
     if gender not in {"neutral", "male", "female"}:

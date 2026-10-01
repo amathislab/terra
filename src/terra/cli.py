@@ -26,13 +26,19 @@ def _default_motion_name(source: Path) -> str:
     return f"motion_{digest}"
 
 
-def _load_json_object(path: Path | None, label: str) -> dict[str, object]:
-    if path is None:
+def _load_json_object(value: str | Path | None, label: str) -> dict[str, object]:
+    """Load a JSON object from an inline argument or a JSON file."""
+    if value is None:
         return {}
-    value = json.loads(path.expanduser().read_text())
-    if not isinstance(value, dict):
-        raise ValueError(f"{label} must contain a JSON object: {path}")
-    return value
+    source = str(value).strip()
+    try:
+        payload = source if source.startswith(("{", "[")) else Path(source).expanduser().read_text()
+        parsed = json.loads(payload)
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"{label} must be a JSON object or JSON file: {error}") from error
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{label} must contain a JSON object")
+    return parsed
 
 
 def _terrain_argument(value: str):
@@ -89,8 +95,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=Path,
         help="SMPL-X/SMPL-H marker-fitting root; required for marker input",
     )
-    parser.add_argument("--config", type=Path, help="method-configuration JSON object")
-    parser.add_argument("--c3d-options", type=Path, help="marker-fitting options JSON object")
+    parser.add_argument("--config", help="method-configuration JSON object or file")
+    parser.add_argument("--c3d-options", help="marker-fitting options JSON object or file")
     parser.add_argument(
         "--trc-up-axis",
         choices=("y", "z"),

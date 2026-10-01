@@ -187,6 +187,7 @@ def test_retarget_smplh_dispatches_each_method_to_its_real_adapter(monkeypatch, 
 
     result = api.retarget_smplh(
         source,
+        stability_policy="off",
         method=method,
         terrain=terrain,
         config=(
@@ -244,7 +245,16 @@ def test_retarget_smplh_can_reuse_shape_outside_experiment_cache(monkeypatch, tm
 
     def fake_fit(*_args, **kwargs):
         captured.update(kwargs)
-        return "trajectory", {}
+        trajectory = SimpleNamespace(
+            data=SimpleNamespace(qpos=np.zeros((3, 7))),
+            info=SimpleNamespace(frequency=100.0),
+        )
+        analysis = {
+            "pos_error": np.zeros((3, 2)),
+            "native_fps": 100.0,
+            "numerical_envelope": {"max_root_step_m": 0.0},
+        }
+        return trajectory, analysis
 
     monkeypatch.setattr(api, "fit_terra_motion", fake_fit)
 
@@ -258,6 +268,7 @@ def test_retarget_smplh_can_reuse_shape_outside_experiment_cache(monkeypatch, tm
 
     assert captured["fitted_shape_path"] == fitted_shape.resolve()
     assert result.analysis["fitted_shape_path"] == str(fitted_shape.resolve())
+    assert result.analysis["stability_check"]["requires_retry"] is False
 
 
 @pytest.mark.parametrize("suffix", (".c3d", ".trc", ".mat"))
@@ -284,6 +295,7 @@ def test_retarget_c3d_forwards_method_specific_configuration(monkeypatch, tmp_pa
     monkeypatch.setattr(api, "retarget_c3d_to_trajectory", fake_retarget)
     result = api.retarget_c3d(
         source,
+        stability_policy="off",
         method=method,
         terrain=_terrain(),
         config=(
@@ -444,6 +456,7 @@ def test_retarget_c3d_forwards_advanced_fit_options(monkeypatch, tmp_path):
 
     api.retarget_c3d(
         source,
+        stability_policy="off",
         terrain=_terrain(),
         c3d_model_path=c3d_models,
         smpl_model_path=smplh_models,
@@ -512,6 +525,7 @@ def test_retarget_trc_prepares_marker_archive_and_forwards_to_shared_fitter(monk
 
     result = api.retarget_trc(
         source,
+        stability_policy="off",
         terrain=_terrain(),
         c3d_model_path=c3d_models,
         smpl_model_path=smplh_models,
@@ -571,6 +585,7 @@ def test_retarget_mat_prepares_marker_archive_and_forwards_to_shared_fitter(monk
 
     result = api.retarget_mat(
         source,
+        stability_policy="off",
         mat_schema=schema,
         mat_selectors=selectors,
         terrain=_terrain(),
@@ -949,3 +964,37 @@ def test_motion_name_strips_mat_extension():
 def test_motion_name_rejects_component_edge_spaces(name):
     with pytest.raises(ValueError, match="motion name"):
         api.normalize_motion_name(name)
+
+
+@pytest.mark.parametrize(
+    ("function_name", "extra"),
+    (("retarget_c3d", {}), ("retarget_trc", {}), ("retarget_mat", {"mat_schema": {}})),
+)
+def test_direct_marker_api_retries_an_unstable_terra_trajectory(monkeypatch, function_name, extra):
+    configs = []
+
+    def fake_marker(*_args, **kwargs):
+        config = kwargs["config"] or {}
+        configs.append(config)
+        unstable = float(config.get("step_size", 0.2)) > 0.1
+        qpos = np.zeros((3, 7))
+        qpos[1:, 0] = 0.04 if unstable else 0.01
+        errors = np.full((3, 2), 0.04)
+        errors[0, 0] = 0.4 if unstable else 0.2
+        return SimpleNamespace(
+            trajectory=SimpleNamespace(
+                data=SimpleNamespace(qpos=qpos),
+                info=SimpleNamespace(frequency=100.0),
+            ),
+            analysis={
+                "pos_error": errors,
+                "native_fps": 100.0,
+                "numerical_envelope": {"max_root_step_m": 0.01},
+            },
+        )
+
+    monkeypatch.setattr(api, "_retarget_marker_trajectory", fake_marker)
+    result = getattr(api, function_name)("motion.c3d", config={"step_size": 0.2}, **extra)
+
+    assert configs == [{"step_size": 0.2}, {"step_size": 0.1}]
+    assert result.analysis["stability_retry"]["triggered"] is True

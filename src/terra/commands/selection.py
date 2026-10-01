@@ -14,7 +14,7 @@ from terra._revision import write_git_commit
 from terra.artifacts import validate_retarget_artifacts
 from terra.commands.run import read_motion_selection
 from terra.paths import StorageRoots
-from terra.training_split import assign_stratified_splits, split_audit
+from terra.training_split import assign_training_splits, split_audit
 
 SELECTION_FIELDS = (
     "motion",
@@ -326,13 +326,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--test-fraction",
-        "--evaluation-fraction",
-        dest="test_fraction",
         type=float,
         help=(
             "hold out this fraction as a fully isolated test set using a deterministic "
-            "identity-disjoint stratified split; --evaluation-fraction is a deprecated alias"
+            "identity-disjoint stratified split"
         ),
+    )
+    parser.add_argument(
+        "--evaluation-fraction",
+        type=float,
+        help="hold out this fraction for policy validation, disjoint from training and final test",
     )
     parser.add_argument(
         "--split-seed",
@@ -354,10 +357,11 @@ def main(argv: list[str] | None = None) -> int:
             terrain_mode=args.terrain_mode,
             duplicate_policy=args.duplicate_policy,
         )
-        if args.test_fraction is not None:
-            rows = assign_stratified_splits(
+        if args.test_fraction is not None or args.evaluation_fraction is not None:
+            rows = assign_training_splits(
                 rows,
-                holdout_fraction=args.test_fraction,
+                test_fraction=args.test_fraction,
+                evaluation_fraction=args.evaluation_fraction,
                 seed=args.split_seed,
             )
         output = roots.resolve_artifact(args.out, base=Path.cwd())

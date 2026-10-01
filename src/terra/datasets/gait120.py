@@ -496,7 +496,7 @@ def _progress_manifest(output_root: Path) -> Path:
 
 
 def _write_manifest(path: Path, clips: list[ClipRecord], *, output_root: Path) -> None:
-    """Write relocatable paths without exposing an incomplete public manifest."""
+    """Write every clip with relocatable paths and its individual fit status."""
 
     root = output_root.resolve()
     rows = []
@@ -1532,14 +1532,10 @@ def validate_dataset(
                 "output": str(chair_selection_output),
                 "error": "",
             }
-            # The full conversion pool may contain rejected files by design.
-            # A complete, quality-gated cohort is the downstream readiness
-            # criterion when post-fit chair selection was requested.
-            report["benchmark_ready"] = True
     report["paired_dataset_ready"] = (
         report["terra_ready"] and not emg_failures and not biomechanics_failures and marker_fit_quality["ready"]
     )
-    report["manifest_published"] = bool(publish_manifest and report["benchmark_ready"])
+    report["manifest_published"] = bool(publish_manifest)
     (output_root / "validation.json").write_text(json.dumps(report, indent=2) + "\n")
     manifest_path = output_root / "manifest.csv" if report["manifest_published"] else _progress_manifest(output_root)
     _write_manifest(manifest_path, clips, output_root=output_root)

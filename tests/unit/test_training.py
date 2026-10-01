@@ -322,3 +322,61 @@ def _write_artifacts(tmp_path: Path, *, method: str = "terra", nonflat: bool = T
         terrain_file=np.asarray(paths.terrain_path.name),
     )
     return paths
+
+
+def test_launch_preflights_the_exact_hydra_overrides_and_environment(monkeypatch):
+    observed = {}
+    launch = SimpleNamespace(
+        algorithm_key="ppo",
+        command=("python", "-m", "terra.rl.experiment", "--config-name=ppo_multi_motion", "experiment.num_envs=8"),
+        environment={"TERRA_VALIDATION_ENVS": "32"},
+    )
+
+    def preflight(**kwargs):
+        observed["preflight"] = kwargs
+
+    def run(command, *, env, check):
+        observed["command"] = command
+        observed["environment"] = env
+        assert check is False
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(training, "training_preflight", preflight)
+    monkeypatch.setattr(training.subprocess, "run", run)
+
+    assert training.launch_training(launch) == 0
+    assert observed["preflight"]["overrides"] == ("experiment.num_envs=8",)
+    assert observed["preflight"]["environment"] == launch.environment
+    assert observed["command"] == launch.command
+    assert observed["environment"]["TERRA_VALIDATION_ENVS"] == "32"
+
+
+def test_preflight_composes_user_overrides_with_launch_environment(monkeypatch):
+    import jax
+    import warp as wp
+
+    captured = {}
+    config = _ppo_config()
+
+    def compose(*, overrides, **_kwargs):
+        captured["overrides"] = overrides
+        captured["validation_envs"] = os.environ["TERRA_VALIDATION_ENVS"]
+        return config
+
+    monkeypatch.delenv("TERRA_VALIDATION_ENVS", raising=False)
+    monkeypatch.setattr(training, "_config_path", lambda _name: Path("/configs/ppo_multi_motion.yaml"))
+    monkeypatch.setattr(training, "_compose_training_config", compose)
+    monkeypatch.setattr(training, "_validate_training_config", lambda *_args, **_kwargs: "PPOJax")
+    monkeypatch.setattr(training, "_ppo_warp_compatibility_error", lambda: None)
+    monkeypatch.setattr(jax, "devices", lambda _backend: ())
+    monkeypatch.setattr(jax, "default_backend", lambda: "cpu")
+    monkeypatch.setattr(wp, "get_cuda_device_count", lambda: 0)
+
+    training.training_preflight(
+        require_cuda=False,
+        overrides=("experiment.num_envs=8",),
+        environment={"TERRA_VALIDATION_ENVS": "64"},
+    )
+
+    assert captured == {"overrides": ("experiment.num_envs=8",), "validation_envs": "64"}
+    assert "TERRA_VALIDATION_ENVS" not in os.environ

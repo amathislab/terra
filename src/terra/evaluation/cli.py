@@ -261,6 +261,7 @@ def run(args: argparse.Namespace) -> int:
         self_collision_m=args.self_collision_tol,
     )
     thresholds.validate()
+    used_thresholds = {"continuous": asdict(thresholds), "phase": UNIFIED_THRESHOLDS["phase"]}
     if args.workers < 1:
         raise SystemExit("--workers must be positive")
     cache_root = str(args.cache_root.resolve())
@@ -336,8 +337,8 @@ def run(args: argparse.Namespace) -> int:
         "name,value\n"
         + "\n".join(
             [
-                *(f"continuous.{key},{value}" for key, value in UNIFIED_THRESHOLDS["continuous"].items()),
-                *(f"phase.{key},{value}" for key, value in UNIFIED_THRESHOLDS["phase"].items()),
+                *(f"continuous.{key},{value}" for key, value in used_thresholds["continuous"].items()),
+                *(f"phase.{key},{value}" for key, value in used_thresholds["phase"].items()),
             ]
         )
         + "\n"
@@ -363,7 +364,7 @@ def run(args: argparse.Namespace) -> int:
         "methods": dict(methods),
         "manifests": {label: str(path) for label, path in classes},
         "motion_selections": class_motions,
-        "thresholds": UNIFIED_THRESHOLDS,
+        "thresholds": used_thresholds,
         "timeline": UNIFIED_TIMELINE,
         "aggregation": UNIFIED_AGGREGATION,
         "options": {

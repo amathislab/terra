@@ -294,7 +294,7 @@ def validate_terrain(
                 fps,
                 allow_boundary_truncation=allow_boundary_truncation,
             )
-            if has_seat
+            if has_seat or seat_support_heights is not None
             else ()
         )
     events, n_seated = drop_seated_contacts(events, seat_rests)

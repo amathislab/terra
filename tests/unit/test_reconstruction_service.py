@@ -17,6 +17,7 @@ from terra.reconstruction import (
 )
 from terra.terrain import (
     PELVIS_SEAT_OFFSET,
+    detect_seat_rests,
     fit_terrain_from_motion,
     resolve_terra_reconstruction_profile,
     validate_terrain,
@@ -234,3 +235,20 @@ def test_pipeline_auto_resolution_has_the_same_numerical_result_as_the_service()
 
     assert expected.terrain is not None
     assert actual.to_dict() == expected.terrain.to_dict()
+
+
+def test_service_scores_rejected_floor_level_seat_without_a_length_mismatch():
+    motion = synth_sit(pelvis_z=0.56)
+    rests = detect_seat_rests(motion, SEAT_JOINTS, FPS)
+    result = reconstruct_terrain(
+        ReconstructionRequest(
+            mode="fit",
+            joints=motion,
+            joint_names=tuple(SEAT_JOINTS),
+            fps=FPS,
+            fit_options={"seat_support_heights": [0.03] * len(rests)},
+        )
+    )
+
+    assert result.report["n_seats"] == 0
+    assert result.validation["n_seat_rests"] == len(rests)

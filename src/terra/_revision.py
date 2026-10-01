@@ -40,7 +40,7 @@ def _git_commit_at(candidate: Path) -> str | None:
 
 
 def git_commit(repo_root: Path | None = None) -> str:
-    """Return the full commit hash for the TERRA source being executed."""
+    """Return the source commit, or ``unknown`` for an unstamped source copy."""
 
     supplied = os.environ.get("TERRA_GIT_COMMIT", "").strip().lower()
     if supplied:
@@ -63,10 +63,7 @@ def git_commit(repo_root: Path | None = None) -> str:
     commit = _git_commit_at(Path(__file__).resolve().parents[2])
     if commit is not None:
         return commit
-    raise RuntimeError(
-        "cannot determine the TERRA Git commit; install an official wheel, run from a Git checkout, "
-        "or set TERRA_GIT_COMMIT for a custom source bundle"
-    )
+    return "unknown"
 
 
 def write_git_commit(directory: Path, *, repo_root: Path | None = None) -> Path:

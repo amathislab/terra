@@ -219,3 +219,16 @@ def test_materialization_rejects_incomplete_or_cross_split_segment_groups(tmp_pa
     mixed_splits = [expanded[0], expanded[1] | {"split": "test"}, expanded[2]]
     with pytest.raises(ValueError, match="cross source roots or splits"):
         materialize_subset(mixed_splits, tmp_path / "cross-split-cache", terrain_mode="mixed")
+
+
+def test_custom_segment_bounds_survive_materialization(tmp_path: Path):
+    row = _source_row(tmp_path, frames=2_501, frequency=100.0)
+    expanded, audit = expand_training_segments(
+        [row], base=tmp_path, trigger_seconds=12.0, maximum_segment_seconds=6.0,
+    )
+
+    assert len(expanded) == 5
+    assert audit["maximum_segment_seconds"] == 6.0
+    assert all(selection_segment(item).maximum_segment_seconds == 6.0 for item in expanded)
+    payload = materialize_subset(expanded, tmp_path / "custom-cache", terrain_mode="mixed")
+    assert payload["split_counts"]["train"] == 5

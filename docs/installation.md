@@ -51,7 +51,7 @@ uv sync --locked --python 3.11 --extra cuda --extra c3d --extra baselines
 Each `uv sync` reconciles the same environment with the flags in that invocation. Keep
 every extra you need on your last command. After activation, run `terra ...` directly.
 If you use `uv run`, repeat the needed extras there too; for example,
-`uv run --locked --extra cuda terra train preflight --multi-motion`. Otherwise,
+`uv run --locked --extra cuda terra train preflight`. Otherwise,
 `uv run` may resync the environment without them.
 
 ## Check inputs separately
@@ -66,10 +66,10 @@ root as well as the SMPL-H retargeting root.
 For training, sync with `--extra cuda` and run:
 
 ```bash
-terra train preflight --multi-motion
+terra train preflight
 ```
 
-On a machine without a GPU, `terra train preflight --multi-motion --allow-no-device`
+On a machine without a GPU, `terra train preflight --allow-no-device`
 checks software and configuration only. A successful software check does not establish
 that a later GPU run will work. Use [Policy training](policy-training.md) for the
 materialized cohort and one-update startup test.

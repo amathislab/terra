@@ -18,8 +18,9 @@ from terra._revision import write_git_commit
 from terra.artifacts import validate_retarget_artifacts
 from terra.paths import StorageRoots
 
-SEGMENT_POLICY = "over20s-balanced-max10s-v1"
-SEGMENT_FIELDS = (
+SEGMENT_POLICY = "balanced-temporal-v2"
+LEGACY_SEGMENT_POLICY = "over20s-balanced-max10s-v1"
+SEGMENT_REQUIRED_FIELDS = (
     "source_motion",
     "segment_start_frame",
     "segment_end_frame_exclusive",
@@ -29,6 +30,7 @@ SEGMENT_FIELDS = (
     "source_frequency_hz",
     "segment_policy",
 )
+SEGMENT_FIELDS = (*SEGMENT_REQUIRED_FIELDS, "segment_trigger_seconds", "segment_maximum_seconds")
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +57,8 @@ class SelectionSegment:
     source_num_frames: int
     source_frequency_hz: float
     policy: str
+    trigger_seconds: float = 20.0
+    maximum_segment_seconds: float = 10.0
 
 
 def _positive_finite(value: float, field: str) -> float:
@@ -125,7 +129,7 @@ def selection_segment(row: Mapping[str, str]) -> SelectionSegment | None:
     populated = {field for field, value in values.items() if value}
     if not populated:
         return None
-    missing = set(SEGMENT_FIELDS) - populated
+    missing = set(SEGMENT_REQUIRED_FIELDS) - populated
     if missing:
         raise ValueError(
             f"segmented selection row {row.get('motion', '')!r} is missing: {', '.join(sorted(missing))}"
@@ -140,12 +144,21 @@ def selection_segment(row: Mapping[str, str]) -> SelectionSegment | None:
             source_num_frames=int(values["source_num_frames"]),
             source_frequency_hz=float(values["source_frequency_hz"]),
             policy=values["segment_policy"],
+            trigger_seconds=float(values["segment_trigger_seconds"] or 20.0),
+            maximum_segment_seconds=float(values["segment_maximum_seconds"] or 10.0),
         )
     except ValueError as error:
         raise ValueError(f"segmented selection row {row.get('motion', '')!r} has invalid numeric fields") from error
-    if segment.policy != SEGMENT_POLICY:
+    if segment.policy not in {SEGMENT_POLICY, LEGACY_SEGMENT_POLICY}:
         raise ValueError(f"unsupported segment policy {segment.policy!r}")
-    expected = temporal_segments(segment.source_num_frames, segment.source_frequency_hz)
+    if segment.policy == LEGACY_SEGMENT_POLICY and (
+        segment.trigger_seconds != 20.0 or segment.maximum_segment_seconds != 10.0
+    ):
+        raise ValueError("legacy segment policy requires the default duration bounds")
+    expected = temporal_segments(
+        segment.source_num_frames, segment.source_frequency_hz,
+        trigger_seconds=segment.trigger_seconds, maximum_segment_seconds=segment.maximum_segment_seconds,
+    )
     if segment.count != len(expected) or not 1 <= segment.index <= segment.count:
         raise ValueError(f"segmented selection row {row.get('motion', '')!r} has inconsistent index/count")
     bounds = expected[segment.index - 1]
@@ -315,6 +328,8 @@ def expand_training_segments(
                 "source_num_frames": str(validated.num_frames),
                 "source_frequency_hz": format(validated.frequency, ".12g"),
                 "segment_policy": SEGMENT_POLICY,
+                "segment_trigger_seconds": format(float(trigger_seconds), ".12g"),
+                "segment_maximum_seconds": format(float(maximum_segment_seconds), ".12g"),
             }
             output.append(expanded)
             by_dataset[dataset]["output_motions"] += 1

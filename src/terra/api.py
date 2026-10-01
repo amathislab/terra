@@ -2,14 +2,14 @@
 
 The solver-level functions in :mod:`terra.pipeline` accept already-loaded motion and
 robot configuration objects. This module owns input dispatch, environment/model
-resolution, method orchestration, and run metadata. Persistent artifact I/O lives in
+resolution, method orchestration, stability retries, and run metadata. Persistent artifact I/O lives in
 :mod:`terra.artifacts`; SMPL-H archive parsing lives in :mod:`terra.smplh`.
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -200,6 +200,23 @@ def _finalize_result(
     )
 
 
+def _apply_public_stability(
+    result: RetargetResult,
+    *,
+    method: RetargetingMethod,
+    stability_policy: Literal["retry", "off"],
+    config: Mapping[str, object] | None,
+    retry: Callable[[dict[str, object]], RetargetResult],
+) -> RetargetResult:
+    if stability_policy not in {"retry", "off"}:
+        raise ValueError("stability_policy must be 'retry' or 'off'")
+    if method != "terra" or stability_policy == "off":
+        return result
+    from terra.stability import apply_stability_policy
+
+    return apply_stability_policy(result, config=config, retry=retry)
+
+
 def _c3d_method_configs(
     method: RetargetingMethod,
     overrides: Mapping[str, object],
@@ -232,6 +249,7 @@ def retarget_smplh(
     cache_root: str | Path | None = None,
     fitted_shape_path: str | Path | None = None,
     logger: logging.Logger | None = None,
+    stability_policy: Literal["retry", "off"] = "retry",
 ) -> RetargetResult:
     """Retarget an arbitrary AMASS-compatible SMPL-H archive.
 
@@ -337,7 +355,18 @@ def retarget_smplh(
         metadata.update(
             fitted_shape_path=str(shape_path),
         )
-    return _finalize_result(request, trajectory, analysis, metadata)
+    result = _finalize_result(request, trajectory, analysis, metadata)
+    return _apply_public_stability(
+        result,
+        method=request.method,
+        stability_policy=stability_policy,
+        config=config,
+        retry=lambda overrides: retarget_smplh(
+            source_path, method=method, terrain=terrain, env_name=env_name,
+            config=overrides, smpl_model_path=smpl_model_path, cache_root=cache_root,
+            fitted_shape_path=fitted_shape_path, logger=logger, stability_policy="off",
+        ),
+    )
 
 
 def _retarget_marker_trajectory(
@@ -460,6 +489,7 @@ def retarget_c3d(
     smpl_model_path: str | Path | None = None,
     cache_root: str | Path | None = None,
     logger: logging.Logger | None = None,
+    stability_policy: Literal["retry", "off"] = "retry",
 ) -> RetargetResult:
     """Fit C3D markers and return a MyoFullBody trajectory in memory.
 
@@ -475,7 +505,7 @@ def retarget_c3d(
     Fitting requires a marker set recognized by the selected surface model.
     """
 
-    return _retarget_marker_trajectory(
+    result = _retarget_marker_trajectory(
         source_path,
         source_suffix=".c3d",
         source_format="c3d",
@@ -490,6 +520,17 @@ def retarget_c3d(
         logger=logger,
     )
 
+    return _apply_public_stability(
+        result,
+        method=method,
+        stability_policy=stability_policy,
+        config=config,
+        retry=lambda overrides: retarget_c3d(
+            source_path, method=method, terrain=terrain, env_name=env_name, config=overrides,
+            c3d_options=c3d_options, c3d_model_path=c3d_model_path, smpl_model_path=smpl_model_path,
+            cache_root=cache_root, logger=logger, stability_policy="off"
+        ),
+    )
 
 def retarget_trc(
     source_path: str | Path,
@@ -504,6 +545,7 @@ def retarget_trc(
     cache_root: str | Path | None = None,
     trc_up_axis: TrcUpAxis = "y",
     logger: logging.Logger | None = None,
+    stability_policy: Literal["retry", "off"] = "retry",
 ) -> RetargetResult:
     """Normalize, fit, and retarget one TRC marker trajectory.
 
@@ -518,7 +560,7 @@ def retarget_trc(
 
     if trc_up_axis not in {"y", "z"}:
         raise ValueError("trc_up_axis must be 'y' or 'z'")
-    return _retarget_marker_trajectory(
+    result = _retarget_marker_trajectory(
         source_path,
         source_suffix=".trc",
         source_format="trc",
@@ -534,6 +576,17 @@ def retarget_trc(
         logger=logger,
     )
 
+    return _apply_public_stability(
+        result,
+        method=method,
+        stability_policy=stability_policy,
+        config=config,
+        retry=lambda overrides: retarget_trc(
+            source_path, method=method, terrain=terrain, env_name=env_name, config=overrides,
+            c3d_options=c3d_options, c3d_model_path=c3d_model_path, smpl_model_path=smpl_model_path,
+            cache_root=cache_root, trc_up_axis=trc_up_axis, logger=logger, stability_policy="off"
+        ),
+    )
 
 def retarget_mat(
     source_path: str | Path,
@@ -549,6 +602,7 @@ def retarget_mat(
     smpl_model_path: str | Path | None = None,
     cache_root: str | Path | None = None,
     logger: logging.Logger | None = None,
+    stability_policy: Literal["retry", "off"] = "retry",
 ) -> RetargetResult:
     """Extract, fit, and retarget one marker trajectory from a MAT file.
 
@@ -562,7 +616,7 @@ def retarget_mat(
     in memory until explicitly published.
     """
 
-    return _retarget_marker_trajectory(
+    result = _retarget_marker_trajectory(
         source_path,
         source_suffix=".mat",
         source_format="mat",
@@ -579,6 +633,18 @@ def retarget_mat(
         logger=logger,
     )
 
+    return _apply_public_stability(
+        result,
+        method=method,
+        stability_policy=stability_policy,
+        config=config,
+        retry=lambda overrides: retarget_mat(
+            source_path, mat_schema=mat_schema, mat_selectors=mat_selectors, method=method,
+            terrain=terrain, env_name=env_name, config=overrides, c3d_options=c3d_options,
+            c3d_model_path=c3d_model_path, smpl_model_path=smpl_model_path, cache_root=cache_root,
+            logger=logger, stability_policy="off"
+        ),
+    )
 
 def retarget(
     source_path: str | Path,
@@ -647,6 +713,7 @@ def retarget(
                 cache_root=cache_root,
                 fitted_shape_path=fitted_shape_path,
                 logger=logger,
+                stability_policy="off",
             )
 
     elif suffix == ".c3d":
@@ -669,6 +736,7 @@ def retarget(
                 smpl_model_path=smpl_model_path,
                 cache_root=cache_root,
                 logger=logger,
+                stability_policy="off",
             )
 
     elif suffix == ".trc":
@@ -690,6 +758,7 @@ def retarget(
                 cache_root=cache_root,
                 trc_up_axis=trc_up_axis or "y",
                 logger=logger,
+                stability_policy="off",
             )
 
     elif suffix == ".mat":
@@ -714,6 +783,7 @@ def retarget(
                 smpl_model_path=smpl_model_path,
                 cache_root=cache_root,
                 logger=logger,
+                stability_policy="off",
             )
 
     else:

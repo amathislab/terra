@@ -47,3 +47,13 @@ def test_source_archive_inside_an_unrelated_git_checkout_remains_packaged(tmp_pa
     assert _source_state(None, package) == "packaged"
     assert _source_state(tmp_path / "archive", package) == "packaged"
     assert _source_state(tmp_path, package) == "dirty"
+
+
+def test_unstamped_source_copy_records_unknown_without_blocking_work(monkeypatch, tmp_path):
+    monkeypatch.delenv("TERRA_GIT_COMMIT", raising=False)
+    monkeypatch.setattr(revision, "_packaged_git_commit", lambda: None)
+    monkeypatch.setattr(revision, "_git_commit_at", lambda _path: None)
+
+    marker = write_git_commit(tmp_path / "result")
+
+    assert marker.read_text() == "unknown\n"

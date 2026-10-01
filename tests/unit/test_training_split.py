@@ -8,6 +8,7 @@ import pytest
 
 from terra.training_split import (
     assign_stratified_splits,
+    assign_training_splits,
     canonical_motion_type,
     split_audit,
     split_identity,
@@ -148,3 +149,41 @@ def test_split_audit_rejects_identity_leakage():
     ]
     with pytest.raises(ValueError, match="identity leakage"):
         split_audit(rows)
+
+
+def test_evaluation_fraction_creates_a_real_identity_disjoint_validation_split():
+    rows = assign_training_splits(
+        _cohort(), evaluation_fraction=0.15, test_fraction=0.15, seed="three-way-v1",
+    )
+    audit = split_audit(rows)
+
+    assert set(audit["splits"]) == {"train", "evaluation", "test"}
+    assert all(audit["splits"][name] > 0 for name in audit["splits"])
+    identities = defaultdict(set)
+    for row in rows:
+        identities[split_identity(row["motion"])].add(row["split"])
+    assert all(len(splits) == 1 for splits in identities.values())
+    assert rows == assign_training_splits(
+        _cohort(), evaluation_fraction=0.15, test_fraction=0.15, seed="three-way-v1",
+    )
+
+
+def test_select_cli_creates_evaluation_rows(monkeypatch, tmp_path):
+    from terra.commands import selection
+
+    observed = {}
+    monkeypatch.setattr(selection, "build_selection", lambda *_args, **_kwargs: _cohort())
+
+    def publish(_path, rows, **_kwargs):
+        observed["rows"] = rows
+        return {"splits": split_audit(rows)["splits"]}
+
+    monkeypatch.setattr(selection, "publish_selection", publish)
+
+    assert selection.main([
+        "--run", str(tmp_path / "run"),
+        "--out", str(tmp_path / "selection.csv"),
+        "--evaluation-fraction", "0.15",
+        "--test-fraction", "0.15",
+    ]) == 0
+    assert set(split_audit(observed["rows"])["splits"]) == {"train", "evaluation", "test"}

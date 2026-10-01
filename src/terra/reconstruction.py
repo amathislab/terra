@@ -214,6 +214,16 @@ def reconstruct_terrain(request: ReconstructionRequest) -> TerrainFitResult:
     from terra.terrain import PELVIS_SEAT_OFFSET, fit_terrain_from_motion, validate_terrain
 
     terrain, report = fit_terrain_from_motion(joints, names, float(request.fps), **effective_options)
+    seat_rests = (
+        detect_seat_rests(
+            joints,
+            names,
+            float(request.fps),
+            allow_boundary_truncation=bool(effective_options.get("allow_boundary_truncated_support", True)),
+        )
+        if effective_options.get("seat", "auto") == "auto"
+        else ()
+    )
     compensate = request.validation.compensate_sloped_offsets
     if compensate is None:
         # Motion-estimated offsets need slope compensation. Any explicitly supplied
@@ -225,6 +235,7 @@ def reconstruct_terrain(request: ReconstructionRequest) -> TerrainFitResult:
         terrain,
         float(request.fps),
         offsets=report.get("joint_offsets"),
+        seat_rests=seat_rests,
         pelvis_seat_offset=report.get("pelvis_seat_offset", PELVIS_SEAT_OFFSET),
         seat_support_heights=report.get("seat_support_heights"),
         allow_boundary_truncation=bool(effective_options.get("allow_boundary_truncated_support", True)),

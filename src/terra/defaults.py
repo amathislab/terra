@@ -17,7 +17,7 @@ DEFAULT_MTP_SMOOTH_WEIGHT = 10.0
 
 
 #: Weight for each mimic-site orientation residual.
-DEFAULT_ORIENT_WEIGHT = 1.0
+DEFAULT_ORIENT_WEIGHT = 0.5
 
 
 #: Foot-site orientation weight used for flat-ground motions.
@@ -34,15 +34,15 @@ DEFAULT_CONTACT_SPEED = 0.30  # m/s, horizontal toe speed below which a foot may
 DEFAULT_CONTACT_HEIGHT = 0.06  # m above the supporting surface, likewise
 
 
-DEFAULT_FOOT_ANCHOR_WEIGHT = 50.0
+DEFAULT_FOOT_ANCHOR_WEIGHT = 100.0
 
 
 #: Weight for horizontal velocity above the stance-foot speed limit.
-DEFAULT_FOOT_VELOCITY_WEIGHT = 75.0
+DEFAULT_FOOT_VELOCITY_WEIGHT = 150.0
 
 
 #: Weight for horizontal displacement during sticking intervals.
-DEFAULT_FOOT_VELOCITY_TRACKING_WEIGHT = 50.0
+DEFAULT_FOOT_VELOCITY_TRACKING_WEIGHT = 200.0
 
 
 #: Horizontal stance-foot speed limit in meters per second.
@@ -52,10 +52,8 @@ DEFAULT_FOOT_VELOCITY_LIMIT = 0.25  # m/s
 DEFAULT_FOOT_RAMP_FRAMES = 8  # ~80 ms at 100 Hz
 
 
-#: Direct stance-height authority is opt-in. It is useful when independent force/event
-#: annotations establish contact but marker-derived bone rotations leave the robot sole a
-#: few centimetres above that support.
-DEFAULT_STANCE_HEIGHT_WEIGHT = 0.0
+#: Direct stance-height authority helps align the robot sole with source support.
+DEFAULT_STANCE_HEIGHT_WEIGHT = 400.0
 DEFAULT_STANCE_HEIGHT_MAX_RECOVERY_PER_ITER = 0.004
 
 
@@ -75,7 +73,7 @@ DEFAULT_ANCHOR_GATE = "strict"
 
 
 #: Weight for polynomial joint-coupler residuals.
-DEFAULT_COUPLER_WEIGHT = 200.0
+DEFAULT_COUPLER_WEIGHT = 0.0
 
 
 #: Static source frames prepended before solving.

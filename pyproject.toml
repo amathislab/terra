@@ -1,0 +1,131 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "terra_build_backend"
+backend-path = ["."]
+
+[project]
+name = "terra-retargeting"
+version = "1.0.0"
+description = "TERRA: terrain-aware motion retargeting for MuscleMimic"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+keywords = [
+    "biomechanics",
+    "motion-capture",
+    "motion-retargeting",
+    "musculoskeletal-modeling",
+    "reinforcement-learning",
+    "terrain",
+]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "joblib",
+    "numpy>=2.2,<2.4",
+    "scipy",
+    "torch==2.13.0",
+    "musclemimic @ git+https://github.com/amathislab/musclemimic_terra_release.git@654678c10d9fe190beb5b75342d91e9ad02dbcd2",
+    "smplx @ git+https://github.com/amathislab/smplx@a5b8e4ac14f79f3f33fd2cf2a16e6f507146b813",
+    "holosoma-retargeting @ git+https://github.com/merc-s/holosoma.git@12022b5ca5e12e460156c2d91a908f80f6c63fa1#subdirectory=src/holosoma_retargeting",
+]
+
+[project.optional-dependencies]
+baselines = [
+    "general-motion-retargeting @ git+https://github.com/amathislab/gmr_plus.git@7c3e77bca3d086326a0f2ca6df52afdf2cb469be",
+]
+c3d = [
+    "ezc3d",
+]
+cuda = [
+    "jax[cuda12]==0.10.2 ; sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+dev = [
+    "ezc3d",
+    "pytest",
+    "ruff",
+]
+
+[project.scripts]
+terra = "terra.commands:main"
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu126", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
+    { index = "pytorch-cpu", marker = "sys_platform != 'linux' or platform_machine != 'x86_64'" },
+]
+
+[[tool.uv.index]]
+name = "nvidia"
+url = "https://pypi.nvidia.com"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[[tool.uv.dependency-metadata]]
+name = "holosoma-retargeting"
+version = "0.1.0"
+requires-dist = [
+    "numpy>=2.2,<2.4",
+    "torch",
+    "tqdm",
+    "scipy",
+    "matplotlib",
+    "trimesh",
+    "smplx",
+    "jinja2",
+    "mujoco",
+    "viser",
+    "robot_descriptions",
+    "yourdfpy",
+    "cvxpy",
+    "libigl",
+    "tyro",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+terra = [
+    "_build_commit.txt",
+    "py.typed",
+    "rl/configs/*.yaml",
+    "datasets/configs/*.toml",
+    "benchmarking/reconstruction/*.toml",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["B", "C4", "DTZ", "E", "F", "I", "N", "RUF", "UP", "W"]
+ignore = [
+    "B008",  # dependency/config APIs use constructor calls as declarative defaults
+    "E501",  # line length is handled by the formatter and readability review
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["terra", "musclemimic", "loco_mujoco"]

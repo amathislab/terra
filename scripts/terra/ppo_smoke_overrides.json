@@ -1,0 +1,123 @@
+{
+  "experiment": {
+    "env_params": {
+      "num_envs": 8,
+      "disabled_contact_pairs": [
+        [
+          "humerus_l_coll",
+          "thorax_coll1"
+        ]
+      ],
+      "use_egocentric_root_observations": true,
+      "enable_heightmap_observations": true,
+      "heightmap_grid_rows": 11,
+      "heightmap_grid_cols": 11,
+      "heightmap_grid_resolution": 0.1,
+      "heightmap_grid_forward_offset": 0.0,
+      "heightmap_body_name": "pelvis",
+      "goal_type": "TerraFullBodyTrackingGoal",
+      "goal_params": {
+        "lookahead_steps": [
+          1,
+          20,
+          40,
+          60,
+          80
+        ],
+        "include_support_intent": false,
+        "enable_motion_phase": false
+      },
+      "reward_params": {
+        "activation_energy_coeff": 2.0,
+        "activation_floor": 0.02,
+        "activation_floor_coeff": 1.0
+      },
+      "terminal_state_params": {
+        "mean_site_deviation_threshold": 0.15,
+        "core_upper_body_mean_site_deviation_threshold": 0.15,
+        "core_upper_body_uses_global_threshold": false,
+        "curriculum_initial_global_threshold": 0.15,
+        "core_upper_body_curriculum_initial_threshold": 0.15
+      }
+    },
+    "task_factory": {
+      "params": {
+        "frame_zero_reset_probability": 0.25,
+        "first_quarter_reset_probability": 0.0
+      }
+    },
+    "total_timesteps": 160,
+    "total_timesteps_is_absolute": true,
+    "lr": 0.0008,
+    "anneal_lr": true,
+    "lr_schedule_type": "warmup_cosine",
+    "warmup_steps": 500,
+    "hold_fraction": 0.0,
+    "min_lr_ratio": 0.1,
+    "save_checkpoints": true,
+    "checkpoint_interval": 1,
+    "max_checkpoints_to_keep": 1,
+    "checkpoints_on_validation": false,
+    "async_checkpointing": false,
+    "save_runtime_state": false,
+    "auto_resume": false,
+    "resume_from": null,
+    "reset_logging_timestep": false,
+    "reset_lr_schedule_on_resume": false,
+    "reset_std_on_resume": null,
+    "ppo_config": {
+      "num_steps": 20,
+      "update_epochs": 1,
+      "num_minibatches": 4,
+      "gamma": 0.99,
+      "gae_lambda": 0.95,
+      "clip_eps": 0.2,
+      "clip_eps_vf": 0.2,
+      "init_std": 0.3,
+      "learnable_std": false,
+      "ent_coef": 0.0,
+      "vf_coef": 0.5
+    },
+    "adaptive_termination": {
+      "enabled": false
+    },
+    "adaptive_sampling": {
+      "enabled": true,
+      "balance_motion_groups": false,
+      "beta": 0.2,
+      "ema_done_init": 2.0,
+      "ema_early_init": 1.0,
+      "alpha": 1.0,
+      "floor_mix": 0.25,
+      "late_failure_floor": 0.25,
+      "difficulty_mix": 0.5,
+      "max_weight_ratio": 2.0
+    },
+    "nonfinite_guard": {
+      "enabled": true,
+      "max_updates_between_checks": 25
+    },
+    "validation": {
+      "evaluate_all": true,
+      "deterministic": false,
+      "minimum_total_rollouts": 100,
+      "rollouts_per_motion": 1,
+      "max_parallel_rollouts": 1024,
+      "terminal_state_params": {
+        "mean_site_deviation_threshold": 0.15,
+        "core_upper_body_mean_site_deviation_threshold": 0.15,
+        "core_upper_body_uses_global_threshold": false,
+        "curriculum_initial_global_threshold": 0.15,
+        "core_upper_body_curriculum_initial_threshold": 0.15
+      },
+      "active": false
+    },
+    "online_logging_interval": 1,
+    "distributed": {
+      "num_devices": 1
+    }
+  },
+  "wandb": {
+    "mode": "disabled"
+  }
+}

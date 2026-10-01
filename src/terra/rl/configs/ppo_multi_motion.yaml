@@ -1,0 +1,417 @@
+# Initial single-host, multi-GPU PPO configuration for ordered TERRA cohorts.
+# Training and validation environment counts are global and are divided across
+# the selected JAX devices by MuscleMimic's host coordinator.
+defaults:
+  - override hydra/job_logging: default
+  - override hydra/launcher: basic
+  - _self_
+
+wandb:
+  project: terra
+  mode: online
+  tags:
+    - terra
+    - ppo
+    - multi-gpu
+    - multi-motion
+    - paired-terrain
+    - compact-observation
+    - ${oc.env:TERRA_TRAINING_SUBSET,selection}
+
+experiment:
+  algorithm: PPOJax
+  training_backend: mjx_warp
+  evaluation_backend: mujoco
+  matmul_precision: high
+
+  task_factory:
+    name: TerraImitationFactory
+    params:
+      frame_zero_reset_probability: 0.5
+      first_quarter_reset_probability: 0.25
+      trajectory_cache_root: ${oc.env:TERRA_TRAJECTORY_CACHE_ROOT,''}
+      trajectory_cache_key: ${terra.motion_selection_hash:train,${oc.env:TERRA_MOTION_SELECTION_RECORD,''}}
+      # Optional dataset-level biomechanics root. When set, Gait120 and
+      # Darmstadt sidecars are aligned to the loaded retargeted trajectories.
+      amass_dataset_conf:
+        rel_dataset_path: ${terra.motion_selection:train,${oc.env:TERRA_MOTION_SELECTION_RECORD,''}}
+        dataset_group: null
+        retargeting_method: ${oc.env:TERRA_RETARGETING_METHOD,terra}
+        output_cache_subdir: ${oc.env:TERRA_RETARGETING_METHOD,terra}
+        cache_root: ${oc.env:TERRA_RETARGETED_MOTIONS}
+        load_paired_terrain: true
+        require_nonflat_terrain: ${oc.decode:${oc.env:TERRA_REQUIRE_NONFLAT_TERRAIN,true}}
+        clear_cache: false
+        allow_cache_download: false
+        trajectory_cache_type: sparse
+
+  env_params:
+    env_name: MjxMyoFullBody
+    headless: true
+    horizon: 30000
+    disable_fingers: true
+    timestep: 0.002
+    n_substeps: 5
+    mjx_backend: warp
+    # Plain-Warp captures are keyed by CUDA device and XLA buffer identity.
+    # MuscleMimic blocks every replica and clears them only after each complete
+    # initialization, update, or validation call; staged modes are not pmap-safe.
+    mjx_warp_graph_mode: warp
+    num_envs: 1024
+    nconmax: 192
+    njmax: 768
+    # Optional explicit MuJoCo <pair> contacts to delete before both MJX and
+    # native MuJoCo compile. Empty preserves the upstream MyoFullBody model.
+    disabled_contact_pairs: []
+
+    enable_muscle_length_observations: false
+    enable_muscle_velocity_observations: false
+    enable_muscle_force_observations: false
+    enable_muscle_excitation_observations: true
+    enable_muscle_activation_observations: true
+    enable_joint_pos_observations: true
+    enable_joint_vel_observations: true
+    enable_touch_sensor_observations: true
+    # Opt-in upstream heading-local root encoding: height, projected gravity,
+    # and heading-frame free-joint velocity. False preserves old checkpoints.
+    use_egocentric_root_observations: false
+    preserve_trajectory_root_xy: true
+    enable_global_root_position_observation: false
+    enable_heightmap_observations: true
+    # Centered 11 x 11 samples at 0.1 m: 1.0 m forward by 1.0 m lateral.
+    heightmap_grid_rows: 11
+    heightmap_grid_cols: 11
+    heightmap_grid_resolution: 0.1
+    heightmap_grid_forward_offset: 0.0
+    heightmap_body_name: pelvis
+
+    init_state_type: PerturbedTrajInitialStateHandler
+    init_state_params:
+      qpos_noise_std: 0.01
+      qvel_noise_std: 0.0
+      perturb_free_joint_pos: false
+      perturb_free_joint_quat: false
+      perturb_free_joint_vel: false
+      perturb_ball_joints: false
+
+    goal_type: TerraGoal
+    goal_params:
+      n_step_lookahead: 1
+      n_step_stride: 1
+      enable_future_reference_observations: true
+      future_reference_stride: 10
+      future_reference_horizon: 100
+      # Used by TerraFullBodyTrackingGoal. The first entry is the immediate
+      # target; later entries are compact future intent horizons.
+      lookahead_steps: [1, 20, 40, 60, 80]
+      include_support_intent: false
+      upper_body_xml_name: torso
+      enable_motion_phase: false
+      use_concise_lookahead: false
+      enable_mimic_site_rpos_observations: false
+      enable_global_root_tracking_observations: false
+      sites_for_mimic: &mimic_sites
+        - pelvis_mimic
+        - upper_body_mimic
+        - head_mimic
+        - left_shoulder_mimic
+        - left_elbow_mimic
+        - left_hand_mimic
+        - right_shoulder_mimic
+        - right_elbow_mimic
+        - right_hand_mimic
+        - left_hip_mimic
+        - left_knee_mimic
+        - left_ankle_mimic
+        - left_toes_mimic
+        - right_hip_mimic
+        - right_knee_mimic
+        - right_ankle_mimic
+        - right_toes_mimic
+
+    reward_type: TerraReward
+    reward_params:
+      qpos_w_sum: 0.5
+      qvel_w_sum: 0.25
+      root_pos_w_sum: 1.0
+      root_quat_w_sum: 0.5
+      root_vel_w_sum: 0.5
+      rpos_w_sum: 1.0
+      rquat_w_sum: 0.5
+      rvel_w_sum: 0.5
+      qpos_w_exp: 5.0
+      qvel_w_exp: 0.5
+      root_pos_w_exp: 10.0
+      root_quat_w_exp: 6.25
+      root_vel_w_exp: 1.0
+      rpos_w_exp: 10.0
+      rquat_w_exp: 6.25
+      rvel_w_exp: 1.0
+      action_rate_coeff: 0.0001
+      # Definitive TERRA muscle-effort objective:
+      # 2 mean(a^2) + mean(max(0, (0.02 - a) / 0.02)^2).
+      activation_energy_coeff: 2.0
+      activation_floor: 0.02
+      activation_floor_coeff: 1.0
+      # correlation over actual activation states and contains no KL term.
+      use_dynamic_velocity_reward_weights: false
+      use_mean_exp_reward: false
+      core_upper_body_position_reward_weight: 1.0
+      core_upper_body_position_reward_exp: 40.0
+      terminal_quality_bonus_weight: 25.0
+      core_upper_body_sites:
+        - upper_body_mimic
+        - head_mimic
+        - left_shoulder_mimic
+        - right_shoulder_mimic
+      sites_for_mimic: *mimic_sites
+
+    control_type: DefaultControl
+    control_params: {}
+
+    terminal_state_type: TerraGlobalMPJPETerminalStateHandler
+    terminal_state_params: &termination
+      mean_site_deviation_threshold: 0.15
+      core_upper_body_mean_site_deviation_threshold: 0.15
+      core_upper_body_uses_global_threshold: true
+      curriculum_initial_global_threshold: 0.25
+      core_upper_body_curriculum_initial_threshold: 0.20
+      core_upper_body_sites:
+        - upper_body_mimic
+        - head_mimic
+        - left_shoulder_mimic
+        - right_shoulder_mimic
+      root_orientation_threshold: 1.0
+      enable_site_check: true
+
+    domain_randomization_type: DefaultRandomizer
+    domain_randomization_params:
+      randomize_gravity: false
+      gravity_range: [9.81, 9.81]
+      randomize_geom_friction_tangential: false
+      geom_friction_tangential_range: [1.0, 1.0]
+      randomize_geom_friction_torsional: false
+      geom_friction_torsional_range: [0.005, 0.005]
+      randomize_geom_friction_rolling: false
+      geom_friction_rolling_range: [0.0001, 0.0001]
+      randomize_geom_damping: false
+      geom_damping_range: [1.0, 1.0]
+      randomize_geom_stiffness: false
+      geom_stiffness_range: [1000.0, 1000.0]
+      randomize_base_mass: false
+      base_mass_to_add_range: [0.0, 0.0]
+      randomize_link_mass: false
+      link_mass_multiplier_range:
+        root_body: [1.0, 1.0]
+        other_bodies: [1.0, 1.0]
+      randomize_com_displacement: false
+      com_displacement_range: [-0.015, 0.015]
+      randomize_joint_friction_loss: false
+      joint_friction_loss_range: [0.0, 0.0]
+      randomize_joint_damping: false
+      joint_damping_range: [0.0, 0.0]
+      randomize_joint_armature: false
+      joint_armature_range: [0.0, 0.0]
+      add_joint_pos_noise: true
+      joint_pos_noise_scale: 0.005
+      add_joint_vel_noise: true
+      joint_vel_noise_scale: 0.1
+      add_gravity_noise: false
+      gravity_noise_scale: 0.0
+      add_free_joint_lin_vel_noise: true
+      lin_vel_noise_scale: 0.04
+      add_free_joint_ang_vel_noise: true
+      ang_vel_noise_scale: 0.05
+      apply_velocity_pushes: false
+      push_interval_range_s: [1.0, 3.0]
+      push_linear_velocity_max: [0.2, 0.2, 0.1]
+      push_angular_velocity_max: [0.2, 0.2, 0.3]
+
+  # PPO/network baseline adapted from the corrected multi-GPU implementation.
+  actor_hidden_layers: [2048, 512, 512, 512, 512, 512, 512]
+  critic_hidden_layers: [2048, 512, 512, 512, 512, 512, 512]
+  activation: silu
+  use_residual: true
+  residual_type: gated
+  residual_gate_init: -2.0
+  use_layernorm: true
+  layernorm_eps: 1e-5
+  use_moe: false
+
+  lr: 4e-4
+  num_envs: ${experiment.env_params.num_envs}
+  total_timesteps: 300000000
+  max_grad_norm: 1.0
+  anneal_lr: true
+  lr_schedule_type: warmup_hold_cosine
+  warmup_steps: 500
+  hold_fraction: 0.55
+  min_lr_ratio: 0.2
+  weight_decay: 0.0
+  optimizer_type: muon
+  muon_config:
+    beta: 0.95
+    nesterov: true
+    ns_steps: 5
+    adaptive: false
+  normalize_env: true
+  online_logging_interval: 5
+
+  ppo_config:
+    # 0.4 s rollouts improve temporal credit assignment for terrain transitions.
+    num_steps: 40
+    update_epochs: 1
+    # Preserve the previous per-device minibatch size when num_steps doubles.
+    num_minibatches: 256
+    gamma: 0.995
+    gae_lambda: 0.97
+    clip_eps: 0.2
+    clip_eps_vf: 0.2
+    init_std: 3.0
+    learnable_std: false
+    ent_coef: 0.0
+    vf_coef: 0.5
+
+  distributed:
+    # All visible devices for direct launches; RunAI pins this to --gpu N.
+    num_devices: -1
+  trajectory:
+    # Replicate the motion library for the first rollout. Static sharding is a
+    # later gate after ordered paired-terrain reset coverage on real GPUs.
+    sharding: none
+
+  n_seeds: 1
+  seeds: null
+  vmap_across_seeds: false
+  debug:
+    enabled: false
+    profile_traj_batch: false
+    profile_val_batch: false
+    track_nacon: false
+    hardware_gate:
+      enabled: false
+      stop_after_checkpoint_update: null
+
+  save_checkpoints: true
+  checkpoint_interval: 500  # PPO optimizer-update chunks, not environment steps.
+  max_checkpoints_to_keep: 3
+  checkpoints_on_validation: false
+  async_checkpointing: false
+  checkpoint_save_concurrent_gb: 4
+  checkpoint_restore_concurrent_gb: 4
+  exact_resume: false
+  # Can be enabled while restoring a compact checkpoint; subsequent checkpoints
+  # then contain the complete environment/RNG state required by exact_resume.
+  save_runtime_state: false
+  auto_resume: true
+  resume_from: null
+  run_id: null
+  checkpoint_root: null
+  reset_logging_timestep: false
+  reset_lr_schedule_on_resume: false
+  reset_std_on_resume: null
+  total_timesteps_is_absolute: false
+
+  # Populated by `terra train submit`; direct launcher invocations leave these null.
+  specification:
+    schema_version: null
+    sha256: null
+    source: null
+
+  adaptive_termination:
+    enabled: true
+    init_threshold: 0.25
+    init_ema_val: 0.5
+    low_band: 0.35
+    high_band: 0.55
+    adjust_factor: 0.98
+    consecutive_k: 10
+    min_threshold: 0.15
+    ema_alpha: 0.1
+  reward_curriculum:
+    enabled: false
+  adaptive_sampling:
+    enabled: false
+    balance_motion_groups: true
+    # Count-EMA controls for progress-aware per-motion failure evidence.
+    beta: 0.2
+    alpha: 1.0
+    floor_mix: 0.1
+    late_failure_floor: 0.25
+    ema_done_init: 10.0
+    ema_early_init: 5.0
+    eps_div: 1.0e-6
+    eps_pow: 1.0e-6
+    # Hierarchical sampler controls. Movement families receive equal mass;
+    # difficulty only redistributes probability within each family.
+    difficulty_mix: 0.5
+    max_weight_ratio: 2.0
+
+  # Scan chunks are also the numerical integrity boundary. If any scalar PPO,
+  # rollout, or diagnostic metric becomes NaN/Inf, save the pre-chunk state and
+  # stop before corrupted parameters can replace the last safe checkpoint.
+  nonfinite_guard:
+    enabled: true
+    max_updates_between_checks: 25
+
+  validation:
+    active: true
+    # Exhaustive validation remains on the compiled MJX-Warp GPU path. Repeat
+    # stochastic rollouts round-robin over the cohort and aggregate them back
+    # to one success probability/coverage/return value per motion.
+    evaluate_all: true
+    deterministic: false
+    minimum_total_rollouts: 100
+    rollouts_per_motion: 3
+    # Exhaustive rollouts are evaluated in bounded batches; every motion still
+    # receives the requested repeats without allocating the full cohort at once.
+    max_parallel_rollouts: 1024
+    # Opt-in recovery mode for devices that cannot retain both the training and
+    # validation executables. Disabled by default to preserve existing runs.
+    release_compilation_caches: false
+    # Emit one durable progress line after every globally completed rollout
+    # chunk. Optional debug lines add chunk timing and rollout-length details.
+    progress: true
+    progress_debug: false
+    num_steps: ${oc.decode:${oc.env:TERRA_VALIDATION_STEPS,616}}
+    # The launcher pads and caps each stochastic rollout chunk to a 32-lane block.
+    num_envs: ${oc.decode:${oc.env:TERRA_VALIDATION_ENVS,32}}
+    num: 20
+    video_active: false
+    video_length: 3000
+    video_frequency: 10
+    # Optional [name=dataset/path, ...] panel. Every entry is rendered from
+    # frame zero and logged separately under Validation/Video/<name>.
+    video_motions: []
+    start_from_beginning: true
+    share_trajectory_handler: true
+    env_params:
+      domain_randomization_type: NoDomainRandomization
+      domain_randomization_params: {}
+    init_state_type: TrajInitialStateHandler
+    init_state_params: {}
+    terminal_state_type: TerraGlobalMPJPETerminalStateHandler
+    terminal_state_params: *termination
+    amass_dataset_conf:
+      rel_dataset_path: ${terra.motion_selection:validation,${oc.env:TERRA_MOTION_SELECTION_RECORD,''}}
+      dataset_group: null
+      retargeting_method: ${oc.env:TERRA_RETARGETING_METHOD,terra}
+      output_cache_subdir: ${oc.env:TERRA_RETARGETING_METHOD,terra}
+      cache_root: ${oc.env:TERRA_RETARGETED_MOTIONS}
+      load_paired_terrain: true
+      require_nonflat_terrain: ${oc.decode:${oc.env:TERRA_REQUIRE_NONFLAT_TERRAIN,true}}
+      clear_cache: false
+      allow_cache_download: false
+      trajectory_cache_type: sparse
+    trajectory_cache_root: ${oc.env:TERRA_TRAJECTORY_CACHE_ROOT,''}
+    trajectory_cache_key: ${terra.motion_selection_hash:validation,${oc.env:TERRA_MOTION_SELECTION_RECORD,''}}
+    quantities:
+      - JointPosition
+      - JointVelocity
+      - SitePosition
+      - RelSitePosition
+      - RelSiteVelocity
+      - RelSiteOrientation
+    measures:
+      - EuclideanDistance
+    rel_site_names: *mimic_sites

@@ -1,0 +1,21 @@
+include README.md
+include uv.lock
+include terra_build_backend.py
+include src/terra/_build_commit.txt
+recursive-include scripts *.py
+include scripts/terra/ppo_smoke_overrides.json
+recursive-include docs *.md
+# The website maintenance guide needs site assets that are not shipped in the sdist.
+exclude docs/README.md
+include docs/assets/images/methodology.webp
+include docs/assets/videos/reconstruction.mp4
+include docs/assets/videos/retargeting-stairs.mp4
+include docs/assets/videos/policy/s00-steep-ascent-ekut-slp201.mp4
+prune prism
+recursive-include src/terra/datasets/configs *.toml
+recursive-include examples *.py
+include src/terra/py.typed
+recursive-include tests *.py
+include .python-version
+include .git_archival.txt
+include .gitattributes

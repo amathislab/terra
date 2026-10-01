@@ -1,0 +1,62 @@
+schema_version = 2
+
+[run]
+output_root = "runs/terrain-reconstruction"
+
+[methods.contact-least-squares.options]
+env_name = "MyoFullBody"
+
+[methods.contact-least-squares.options.config]
+velocity_threshold_m_s = 0.30
+minimum_contact_duration_s = 0.10
+local_window_s = 0.30
+local_height_tolerance_m = 0.05
+footprint_margin_m = 0.15
+minimum_footprint_side_m = 0.30
+minimum_raised_height_m = 0.02
+maximum_slope_deg = 59.0
+buried_depth_m = 0.05
+
+[methods.voronoi.options]
+env_name = "MyoFullBody"
+# TIP and SceneBot each model one interaction node per foot. The fitted toe landmarks
+# are the available surface proxies; ankle centres remain evaluation queries only.
+terrain_links = ["L_Toe", "R_Toe", "Pelvis"]
+pelvis_link = "Pelvis"
+# PRISM development meshes selected this posterior body-surface height rule. The
+# baseline keeps its own contact intervals and reconstruction backend.
+seat_height_source = "shared_posed_posterior_body_surface"
+
+[methods.voronoi.options.link_offsets]
+L_Toe = 0.0
+R_Toe = 0.0
+
+[methods.voronoi.options.config]
+# TIP-derived spatial discretization and influence width.
+grid_size_m = 0.10
+plateau_side_m = 1.0
+height_merge_tolerance_m = 0.10
+# Numerical floor representation: retain every positive reconstructed support surface.
+# This is an implementation choice, not a reported TIP or SceneBot threshold.
+minimum_box_height_m = 0.0001
+# Fail-closed memory guard; it does not change accepted terrain when the cap is not hit.
+max_merge_candidate_pairs = 100000000
+
+[methods.terra-no-physical-cues]
+
+[methods.terra]
+
+[datasets.amass]
+config = "bundled:amass"
+
+[datasets.gait120]
+config = "bundled:gait120"
+
+[datasets.darmstadt]
+config = "bundled:darmstadt"
+
+[datasets.vielemeyer]
+config = "bundled:vielemeyer"
+
+[datasets.prism]
+config = "bundled:prism"

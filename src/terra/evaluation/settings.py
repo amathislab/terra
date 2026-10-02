@@ -11,9 +11,7 @@ BENCHMARK_THRESHOLDS: dict[str, float] = {
     "foot_contact_height_m": 0.020,
     # The shared four-joint kinematic contact detector uses TERRA's default.
     "source_contact_speed_m_s": 0.300,
-    # Retain the established study threshold after converting displacement to a
-    # physical horizontal velocity.  A 0.01 m/s threshold classifies normal planted-
-    # foot motion and solver noise as skating in practice.
+    # Horizontal planted-foot speed above this limit counts as skating.
     "skating_speed_m_s": 0.300,
     "terrain_contact_m": 0.100,
     "joint_limit": 1e-5,

@@ -199,6 +199,8 @@ class TerraRetargeter(InteractionMeshRetargeter if OMNIRETARGET_INSTALLED else o
     ):
         """Calculate body-point Jacobians and positions in one forward pass.
 
+        Adapted from Holosoma (Apache-2.0); see NOTICE for attribution.
+
         Args:
             q: Full generalized-position vector.
             links: Labels mapped to robot body names.
@@ -291,7 +293,7 @@ class TerraRetargeter(InteractionMeshRetargeter if OMNIRETARGET_INSTALLED else o
             jac_pos,
             None,
             point_world,
-            int(body_idx),
+            int(np.asarray(body_idx).item()),
         )
         transform = self._build_transform_qdot_to_qvel_fast()
         return jac_pos @ transform

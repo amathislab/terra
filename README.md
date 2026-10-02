@@ -28,6 +28,8 @@ licenses and must be obtained from their original providers.
 `terra retarget` runs components 2 and 3 together for one motion. The standalone
 reconstruction command handles selected cohorts; `terra train select` accepts either
 a validated retargeting cache or completed dataset runs.
+For collection processing and motion metrics, see the [dataset workflows](docs/dataset-workflows.md)
+guide for `terra run` and `terra evaluate`.
 Watch short examples of [terrain reconstruction](docs/assets/videos/reconstruction.mp4),
 [stair retargeting comparison](docs/assets/videos/retargeting-stairs.mp4), and a
 [ramp policy rollout](docs/assets/videos/policy/s00-steep-ascent-ekut-slp201.mp4).
@@ -37,8 +39,8 @@ Watch short examples of [terrain reconstruction](docs/assets/videos/reconstructi
 Use **Linux**, **Python 3.11**, [Git](https://git-scm.com/), and
 [uv](https://docs.astral.sh/uv/). Run commands from the repository root. The lockfile
 pins TERRA's Python dependencies and the MuscleMimic `terra` branch. On Linux x86-64, the
-locked PyTorch wheel is a CUDA 12.6 build even when fitting on CPU, so allow for a
-substantial first download. A GPU is required for PPO training and policy evaluation; it
+locked PyTorch wheel is a CUDA 12.6 build even when fitting on CPU, so allow
+roughly 8 GB for the base environment, plus download-cache space. A GPU is required for PPO training and policy evaluation; it
 is not required for motion loading or artifact checks.
 
 ```bash
@@ -135,10 +137,15 @@ the Python API, marker inputs, configuration choices, artifact layout, and video
 
 For development, run `uv sync --locked --python 3.11 --extra dev`, then
 `uv run --locked --extra dev pytest -q`. Distribution builds and wheel CLI checks run
-with `uv run --locked --extra dev pytest -q --runslow`; build release artifacts with
+with `uv run --locked --extra dev pytest -q --runslow`. Real method checks additionally
+use the licensed inputs described in [installation notes](docs/installation.md#release-checks). Build release artifacts with
 `uv build`.
-TERRA is licensed under [Apache-2.0](LICENSE). Third-party code, datasets, body models,
-and checkpoints retain their respective licenses.
+TERRA is licensed under [Apache-2.0](LICENSE); [NOTICE](NOTICE) lists adapted code.
+The required `smplx` dependency uses MPI's
+[non-commercial research license](https://github.com/vchoutas/smplx/blob/main/LICENSE).
+SMPL-H/MANO models and motion datasets also have their own provider terms.
+Check those terms for your intended use; installing TERRA does not grant additional
+rights to these dependencies or assets.
 
 ## Citation
 

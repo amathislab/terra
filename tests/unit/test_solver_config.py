@@ -95,6 +95,9 @@ def test_omniretarget_profile_stays_contribution_free_after_typed_resolution():
     ).for_scene(on_terrain=True)
 
     assert active_qp_terms(config) == []
+    assert config.stance_height_weight == 0.0
+    assert config.foot_anchor_weight == 50.0
+    assert config.torso_orient_weight == 1.0
     assert config.posthoc_repair is False
     assert config.posthoc_tendon_repair is False
 

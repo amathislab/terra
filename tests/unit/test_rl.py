@@ -45,6 +45,7 @@ class _TrajectoryResetCarry:
         return replace(self, **changes)
 
 
+@pytest.mark.slow
 def test_mjx_jax_preserves_terra_body_terrain_contacts():
     spec = mujoco.MjSpec.from_string(
         """
@@ -58,8 +59,7 @@ def test_mjx_jax_preserves_terra_body_terrain_contacts():
         </mujoco>
         """
     )
-    env = object.__new__(MjxMyoFullBody)
-    env.mjx_backend = "jax"
+    env = MjxMyoFullBody(mjx_backend="jax")
 
     result = env._modify_spec_for_mjx(spec)
     geoms = {geom.name: geom for geom in result.geoms}
@@ -71,25 +71,30 @@ def test_mjx_jax_preserves_terra_body_terrain_contacts():
     assert geoms["foot_collision"].conaffinity == 0
 
 
-def _reward_without_initialization(
+def _test_reward(
     *,
     dynamic: bool = False,
     activation_floor: float = 0.0,
     activation_floor_coeff: float = 0.0,
 ) -> TerraReward:
-    reward = object.__new__(TerraReward)
-    reward._qvel_w_sum = 0.25
-    reward._root_vel_w_sum = 0.5
-    reward._use_dynamic_velocity_reward_weights = dynamic
-    reward._activation_floor = activation_floor
-    reward._activation_floor_coeff = activation_floor_coeff
-    reward._emg_correlation_reward_weight = 0.0
-    reward._emg_correlation_min_samples = 3
-    reward._emg_prediction_std_threshold = 1e-6
-    reward._emg_target_std_threshold = 1e-6
-    reward._emg_max_channels = 12
-    reward._core_upper_body_position_reward_weight = 1.0
-    reward._terminal_quality_bonus_weight = 25.0
+    sites = ["pelvis_mimic", "upper_body_mimic", "head_mimic", "left_shoulder_mimic", "right_shoulder_mimic"]
+    model = mujoco.MjModel.from_xml_string(
+        "<mujoco><worldbody><body name='torso'><freejoint name='root'/><geom size='.1'/>"
+        + "".join(f"<site name='{name}'/>" for name in sites)
+        + "</body></worldbody></mujoco>"
+    )
+    info = {"upper_body_xml_name": "torso", "root_free_joint_xml_name": "root", "sites_for_mimic": sites}
+    env = SimpleNamespace(
+        _model=model, obs_container=None, th=None, sites_for_mimic=sites, _get_all_info_properties=lambda: info
+    )
+    reward = TerraReward(
+        env,
+        qvel_w_sum=0.25,
+        root_vel_w_sum=0.5,
+        use_dynamic_velocity_reward_weights=dynamic,
+        activation_floor=activation_floor,
+        activation_floor_coeff=activation_floor_coeff,
+    )
     reward._core_upper_body_tracking = lambda *_args: (np.asarray(0.8), np.asarray(0.1))
     return reward
 
@@ -118,7 +123,7 @@ def test_terra_reward_uses_configured_velocity_weights_and_logs_raw_activation(m
     carry = _Carry(np.asarray(0.2), np.asarray(0.2))
     data = SimpleNamespace(act=np.asarray([0.25, 0.75]))
 
-    _, next_carry, reward_info = _reward_without_initialization()(  # type: ignore[misc]
+    _, next_carry, reward_info = _test_reward()(  # type: ignore[misc]
         None,
         None,
         None,
@@ -157,7 +162,7 @@ def test_terra_reward_penalizes_silent_muscles_with_normalized_floor(monkeypatch
     carry = _Carry(np.asarray(0.2), np.asarray(0.2))
     data = SimpleNamespace(act=backend.asarray([0.0, 0.01, 0.02, 0.04]))
 
-    reward, _, reward_info = _reward_without_initialization(
+    reward, _, reward_info = _test_reward(
         activation_floor=0.02,
         activation_floor_coeff=1.0,
     )(
@@ -197,7 +202,7 @@ def test_terra_reward_contains_nonfinite_post_base_terms(monkeypatch):
         )
 
     monkeypatch.setattr(MimicReward, "__call__", fake_reward)
-    reward_fn = _reward_without_initialization()
+    reward_fn = _test_reward()
     reward_fn._core_upper_body_tracking = lambda *_args: (
         np.asarray(np.nan),
         np.asarray(np.inf),
@@ -234,7 +239,7 @@ def test_terra_reward_can_preserve_curriculum_managed_weights(monkeypatch):
     carry = _Carry(np.asarray(0.1), np.asarray(0.15))
     data = SimpleNamespace(act=np.asarray([]))
 
-    _, next_carry, reward_info = _reward_without_initialization(dynamic=True)(  # type: ignore[misc]
+    _, next_carry, reward_info = _test_reward(dynamic=True)(  # type: ignore[misc]
         None,
         None,
         None,
@@ -259,10 +264,10 @@ def test_terra_reward_adds_quality_bonus_only_at_successful_trajectory_end(monke
     carry = _Carry(np.asarray(0.2), np.asarray(0.2))
     data = SimpleNamespace(act=np.asarray([]))
 
-    reward, _, reward_info = _reward_without_initialization()(
+    reward, _, reward_info = _test_reward()(
         None, None, None, False, {}, _reward_env(at_end=True), None, data, carry, np
     )
-    failed_reward, _, failed_info = _reward_without_initialization()(
+    failed_reward, _, failed_info = _test_reward()(
         None, None, None, True, {}, _reward_env(at_end=True), None, data, carry, np
     )
 
@@ -273,8 +278,11 @@ def test_terra_reward_adds_quality_bonus_only_at_successful_trajectory_end(monke
 
 
 def test_terra_metrics_do_not_shift_preserved_trajectory_roots():
-    handler = object.__new__(TerraMetricsHandler)
-    handler._preserve_trajectory_root_xy = True
+    model = mujoco.MjModel.from_xml_string(
+        "<mujoco><worldbody><body><freejoint/><geom size='.1'/></body></worldbody></mujoco>"
+    )
+    env = SimpleNamespace(th=None, get_model=lambda: model, preserve_trajectory_root_xy=True)
+    handler = TerraMetricsHandler(OmegaConf.create({"experiment": {}}), env)
 
     assert handler._get_root_xy_offset(SimpleNamespace()) is None
 
@@ -334,14 +342,30 @@ def test_validation_video_builds_named_motion_panel(tmp_path):
 
 
 def test_frame_zero_reset_wrapper_is_scoped_by_handler_configuration():
+    from loco_mujoco.trajectory.dataclasses import (
+        Trajectory,
+        TrajectoryData,
+        TrajectoryInfo,
+        _trajectory_model_from_mujoco,
+    )
     from loco_mujoco.trajectory.handler import TrajectoryHandler
 
     install_backend_integrations()
-    handler = object.__new__(TrajectoryHandler)
-    handler.random_start = True
-    handler.start_from_random_step = True
+    model = mujoco.MjModel.from_xml_string(
+        "<mujoco><worldbody><body><freejoint name='root'/><geom size='.1'/></body></worldbody></mujoco>"
+    )
+    trajectory = Trajectory(
+        TrajectoryInfo(
+            ["root"],
+            _trajectory_model_from_mujoco(model, np, include_bodies=True, site_ids=np.empty(0, dtype=int)),
+            100.0,
+        ),
+        TrajectoryData(
+            qpos=np.tile(model.qpos0, (12, 1)), qvel=np.zeros((12, model.nv)), split_points=np.asarray([0, 12])
+        ),
+    )
+    handler = TrajectoryHandler(model, materialized_traj=trajectory)
     handler.frame_zero_reset_probability = 1.0
-    handler.traj = SimpleNamespace(data=SimpleNamespace(split_points=np.asarray([0, 12])))
     carry = _TrajectoryResetCarry(key=None, selected_traj_idx=-1)
 
     _, next_carry = handler.reset_state(None, None, None, carry, np)
@@ -469,7 +493,8 @@ def _termination_fixture(*, reference_xy=(0.0, 0.0), preserve_root_xy=True, n_si
         preserve_trajectory_root_xy=preserve_root_xy,
     )
     carry = SimpleNamespace(termination_threshold=np.asarray(0.25, dtype=np.float32))
-    handler = object.__new__(TerraGlobalMPJPETerminalStateHandler)
+    env._get_all_info_properties = lambda: {}
+    handler = TerraGlobalMPJPETerminalStateHandler(env, core_upper_body_mean_site_deviation_threshold=None)
     handler.enable_site_check = True
     handler.root_orientation_threshold = 1.0
     handler._root_qpos_ids_xy = np.asarray([0, 1])

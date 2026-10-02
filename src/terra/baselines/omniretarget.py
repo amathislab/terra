@@ -5,13 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from terra._musclemimic import SMPLH_BONE_ORDER_NAMES
-from terra.baselines._spec import BaselineSpec
-
-OMNIRETARGET_BASELINE = BaselineSpec(
-    key="omniretarget",
-    label="OmniRetarget",
-    config={"algorithm": "omniretarget", "method_profile": "omniretarget"},
-)
 
 try:
     from holosoma_retargeting.config_types.data_type import SMPLH_DEMO_JOINTS
@@ -57,7 +50,6 @@ def fit_motion(env_name, robot_conf, motion_data, logger, config: Mapping[str, o
 
 
 __all__ = [
-    "OMNIRETARGET_BASELINE",
     "OMNIRETARGET_INSTALLED",
     "SMPLH_DEMO_JOINTS",
     "InteractionMeshRetargeter",

@@ -1,0 +1,6 @@
+TERRA includes a body-point Jacobian calculation adapted from Holosoma:
+https://github.com/amazon-far/holosoma
+src/holosoma_retargeting/holosoma_retargeting/src/interaction_mesh_retargeter.py
+Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+TERRA modifies the implementation to reuse a single MuJoCo forward pass.

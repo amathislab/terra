@@ -78,7 +78,6 @@ class Clip:
     output_path: str
     expected_family: str
     terrain_class: str = ""
-    biomechanics_path: str = ""
     expected_slope_deg: float | None = None
     expected_riser_m: float | None = None
     calibration_motion: str = ""
@@ -195,7 +194,7 @@ def _write_manifest(path: Path, clips: list[Clip]) -> None:
     rows = []
     for clip in clips:
         row = asdict(clip)
-        for field_name in ("marker_path", "output_path", "biomechanics_path"):
+        for field_name in ("marker_path", "output_path"):
             if not row[field_name]:
                 continue
             value = Path(row[field_name]).resolve()

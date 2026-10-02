@@ -1,61 +1,16 @@
 import csv
 import json
-from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 
 from terra._musclemimic import OPTIMIZED_SHAPE_FILE_NAME
 from terra.commands.materialize import materialize_subset
 from terra.commands.selection import (
-    GAIT120_NONFLAT_MOVEMENTS,
-    balanced_gait120_nonflat_motions,
     build_selection,
     publish_selection,
 )
 from terra.commands.selection import main as select_main
 from terra.paths import StorageRoots
-
-
-def _gait120_catalog(subjects: int = 100) -> list[str]:
-    return [
-        f"Gait120/S{subject:03d}/{movement}/Trial{trial:02d}/AllSteps_stageii"
-        for movement in GAIT120_NONFLAT_MOVEMENTS
-        for subject in range(1, subjects + 1)
-        for trial in range(1, 6)
-    ]
-
-
-def test_balanced_gait120_nonflat_cohort_has_exact_movement_and_trial_counts():
-    selected = balanced_gait120_nonflat_motions(
-        _gait120_catalog(),
-        per_movement=75,
-        seed="cohort-v1",
-    )
-
-    parsed = [motion.split("/") for motion in selected]
-    assert len(selected) == 300
-    assert len(set(selected)) == 300
-    assert Counter(parts[2] for parts in parsed) == dict.fromkeys(GAIT120_NONFLAT_MOVEMENTS, 75)
-    for movement in GAIT120_NONFLAT_MOVEMENTS:
-        movement_rows = [parts for parts in parsed if parts[2] == movement]
-        assert len({parts[1] for parts in movement_rows}) == 75
-        assert Counter(parts[3] for parts in movement_rows) == {
-            f"Trial{trial:02d}": 15 for trial in range(1, 6)
-        }
-
-
-def test_balanced_gait120_nonflat_cohort_is_seeded_and_excludes_incomplete_subjects():
-    catalog = _gait120_catalog()
-    unavailable = "Gait120/S001/StairAscent/Trial03/AllSteps_stageii"
-    catalog.remove(unavailable)
-
-    first = balanced_gait120_nonflat_motions(catalog, per_movement=20, seed="cohort-v1")
-    repeated = balanced_gait120_nonflat_motions(catalog, per_movement=20, seed="cohort-v1")
-    alternate = balanced_gait120_nonflat_motions(catalog, per_movement=20, seed="cohort-v2")
-
-    assert first == repeated
-    assert first != alternate
-    assert not any(motion.startswith("Gait120/S001/StairAscent/") for motion in first)
 
 
 def test_materialize_subset_hardlinks_and_writes_git_commit(monkeypatch, tmp_path):
@@ -159,7 +114,7 @@ def test_materialize_subset_records_and_validates_flat_terrain(monkeypatch, tmp_
         path.write_bytes(path.name.encode())
     row = {
         "motion": motion,
-        "dataset": "amass-locomotion",
+        "dataset": "amass",
         "source_cache_root": str(source),
         "trajectory_relpath": str(trajectory.relative_to(source)),
         "analysis_relpath": str(analysis.relative_to(source)),
@@ -191,7 +146,7 @@ def test_materialize_subset_accepts_canonical_flat_artifacts_without_terrain_sid
     analysis.write_bytes(b"analysis")
     row = {
         "motion": motion,
-        "dataset": "amass-locomotion",
+        "dataset": "amass",
         "source_cache_root": str(source),
         "trajectory_relpath": str(trajectory.relative_to(source)),
         "analysis_relpath": str(analysis.relative_to(source)),
@@ -331,7 +286,7 @@ def test_training_selection_validates_runs_and_preserves_explicit_order(monkeypa
 
 def test_training_selection_accepts_only_flat_artifacts_in_flat_mode(monkeypatch, tmp_path):
     motion = "KIT/1/walk01_poses"
-    run_root, cache_root = _current_run(tmp_path, "amass-locomotion", (motion,))
+    run_root, cache_root = _current_run(tmp_path, "amass", (motion,))
 
     def validated(root, validated_motion, **kwargs):
         assert root == cache_root
@@ -370,10 +325,23 @@ def test_training_selection_cli_accepts_one_validated_retargeted_motion(monkeypa
 
     monkeypatch.setattr("terra.commands.selection.validate_retarget_artifacts", validated)
     selection = tmp_path / "selection.csv"
-    assert select_main([
-        "--cache-root", str(cache), "--motion", motion, "--dataset", "first-run",
-        "--terrain-mode", "mixed", "--out", str(selection),
-    ]) == 0
+    assert (
+        select_main(
+            [
+                "--cache-root",
+                str(cache),
+                "--motion",
+                motion,
+                "--dataset",
+                "first-run",
+                "--terrain-mode",
+                "mixed",
+                "--out",
+                str(selection),
+            ]
+        )
+        == 0
+    )
     with selection.open(newline="") as handle:
         rows = list(csv.DictReader(handle))
     assert len(rows) == 1
@@ -385,9 +353,7 @@ def test_training_selection_cli_accepts_one_validated_retargeted_motion(monkeypa
 def test_training_selection_can_preserve_first_artifact_for_cross_run_duplicates(monkeypatch, tmp_path):
     motion = "KIT/1/walk01_poses"
     nonflat_run, nonflat_cache = _current_run(tmp_path / "nonflat", "amass", (motion,))
-    flat_run, _flat_cache = _current_run(
-        tmp_path / "flat", "amass-locomotion", (motion,)
-    )
+    flat_run, _flat_cache = _current_run(tmp_path / "flat", "amass", (motion,))
 
     def validated(cache_root, selected_motion, **_kwargs):
         base = cache_root / "MyoFullBody/terra" / selected_motion

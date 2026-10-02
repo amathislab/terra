@@ -59,7 +59,6 @@ def test_converter_defaults_follow_external_storage_roots(tmp_path: Path, monkey
     vielemeyer_args = vielemeyer._parse_args([])
 
     assert gait.original_root == data_root / "Gait120-original" / "extracted"
-    assert gait.emg_root == data_root / "Gait120-EMG"
     assert gait.output_root == artifact_root / "gait120" / "smplh"
     assert gait.smpl_model_path == model_root
     assert darmstadt_args.input_root == data_root / "Darmstadt-Stair-Ambulation"

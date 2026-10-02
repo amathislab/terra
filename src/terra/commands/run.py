@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 
 from terra._files import atomic_write
 from terra._revision import write_git_commit
+from terra.datasets.config import resolve_dataset_config
 
 if TYPE_CHECKING:
     from terra.dataset_pipeline import DatasetConfig, MotionRecord
@@ -70,15 +71,6 @@ def terminal_failure_count(rows: list[dict], *, allow_conversion_failures: bool 
     return sum(row["status"] not in accepted for row in rows)
 
 
-def _config_path(value: str) -> Path:
-    candidate = Path(value).expanduser()
-    if candidate.suffix == ".toml" or candidate.parent != Path("."):
-        return candidate.resolve()
-    from terra.datasets.config import bundled_dataset_config
-
-    return bundled_dataset_config(value)
-
-
 def read_motion_selection_rows(path: Path) -> list[dict[str, str]]:
     """Read unique selection rows from a CSV or one-ID-per-line TXT file."""
     lines = path.read_text().splitlines()
@@ -105,13 +97,8 @@ def read_motion_selection(path: Path) -> list[str]:
 
 
 def _selection_path(value: Path, config: DatasetConfig) -> Path:
-    """Resolve a filesystem selection or a bundled selection name."""
+    """Resolve an explicit selection file against the input storage roots."""
 
-    from terra.datasets.selections import DATASET_SELECTION_NAMES, bundled_dataset_selection
-
-    name = value.as_posix().casefold().replace("_", "-")
-    if name in DATASET_SELECTION_NAMES:
-        return bundled_dataset_selection(name)
     resolved = config.storage_roots.resolve_input(value, base=Path.cwd())
     assert resolved is not None
     return resolved
@@ -365,10 +352,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--selection-manifest",
         type=Path,
-        help=(
-            "CSV/TXT selection used to filter the dataset; packaged cohorts include "
-            "'amass', 'darmstadt', 'gait120', 'prism', and 'vielemeyer'"
-        ),
+        help=("CSV with a motion column or TXT with one motion ID per line."),
     )
     parser.add_argument(
         "--all-motions",
@@ -403,7 +387,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--terrain-method",
-        help="Expected reconstruction method in --terrain-dir (for example, voronoi).",
+        help="Expected reconstruction method in --terrain-dir (terra).",
     )
     parser.add_argument(
         "--method",
@@ -454,7 +438,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     from terra.dataset_pipeline import ensure_robot_shape, load_dataset_config, load_motion_records
 
-    config = load_dataset_config(_config_path(args.config))
+    config = load_dataset_config(resolve_dataset_config(args.config))
     replacements = {}
     for name in ("input_root", "manifest_path", "cache_root", "run_root"):
         cli_name = "manifest" if name == "manifest_path" else name
@@ -466,6 +450,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 else config.storage_roots.resolve_artifact
             )
             replacements[name] = resolver(value, base=Path.cwd())
+    if "cache_root" in replacements and config.reference_cache_root == config.cache_root:
+        replacements["reference_cache_root"] = replacements["cache_root"]
     if args.method is not None:
         replacements["method"] = args.method
         if args.run_root is None and args.method != config.method:

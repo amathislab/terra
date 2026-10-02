@@ -1,4 +1,5 @@
 include README.md
+include NOTICE
 include uv.lock
 recursive-include scripts *.py
 include scripts/terra/ppo_smoke_overrides.json

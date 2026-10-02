@@ -1,11 +1,8 @@
 """Inspect Gait120 and build TERRA-ready AMASS/SMPL-H trajectories.
 
 The original dataset stores up to two TRC gait cycles per locomotion trial and
-one transition per stool trial.  The companion ``Gait120-EMG`` tree stores the
-same subject/movement/trial/step hierarchy in SciPy-readable
-``ConvertedData.mat`` files.  This script joins those sources by their shared
-key, concatenates the available TRC steps, fits SMPL-H with MoSh++-style, and
-writes AMASS-like ``.npz`` files.
+one transition per stool trial. This converter concatenates available TRC steps,
+fits SMPL-H, and writes AMASS-like ``.npz`` motion files.
 
 The Stage-I shape/marker calibration is reused for every motion from a subject.
 """
@@ -14,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
 import multiprocessing
 import os
@@ -30,17 +26,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from scipy.io import loadmat
 
 from terra._revision import write_git_commit
-from terra.datasets.biomechanics import (
-    biomechanics_path,
-    empty_grf,
-    motion_clock,
-    resample_linear,
-    validate_biomechanics,
-    write_biomechanics,
-)
 from terra.paths import StorageRoots
 from terra.trc import TrcData, load_trc
 
@@ -64,23 +51,6 @@ MOVEMENT_METADATA = {
     "StandToSit": MovementMetadata("steps", "chair_sit", (1,)),
 }
 TARGET_MOVEMENTS = tuple(MOVEMENT_METADATA)
-CHAIR_MOVEMENTS = ("SitToStand", "StandToSit")
-CHAIR_SELECTION_SEED = "terra-gait120-chair-v1"
-EXPECTED_EMG_CHANNELS = (
-    "VastusLateralis",
-    "RectusFemoris",
-    "VastusMedialis",
-    "TibialisAnterior",
-    "BicepsFemoris",
-    "Semitendinosus",
-    "GastrocnemuisMedialis",
-    "GastrocnemiusLateralis",
-    "SoleusMedialis",
-    "SoleusLateralis",
-    "PeroneusLongus",
-    "PeroneusBrevis",
-)
-GAIT120_EMG_FPS = 2000.0
 REPORT_VERSION = 1
 MARKER_ARCHIVE_VERSION = 1
 
@@ -92,23 +62,11 @@ class StepRecord:
     trial: int
     step: int
     trc_path: str
-    mot_path: str
-    emg_path: str
     trc_exists: bool = False
     trc_valid: bool = False
     trc_frames: int = 0
     marker_count: int = 0
     marker_fps: float | None = None
-    mot_exists: bool = False
-    emg_exists: bool = False
-    emg_valid: bool = False
-    emg_channels: int = 0
-    emg_samples_min: int = 0
-    emg_samples_max: int = 0
-    emg_native_samples_min: int = 0
-    emg_native_samples_max: int = 0
-    emg_all_finite: bool = False
-    usable_pair: bool = False
     error: str = ""
 
 
@@ -119,16 +77,12 @@ class ClipRecord:
     trial: int
     paired_steps: str
     marker_archive: str
-    emg_archive: str
     output_path: str
     motion: str
-    emg_path: str
     trc_paths: str
-    mot_paths: str
     dataset: str = "gait120"
     expected_family: str = ""
     terrain_class: str = ""
-    biomechanics_archive: str = ""
     source_frames: int = 0
     output_frames: int = 0
     fps: float | None = None
@@ -140,11 +94,6 @@ class ClipRecord:
     fit_failure_reason: str = "not_validated"
     status: str = "pending"
     error: str = ""
-
-
-def _subject_block(subject: int) -> str:
-    start = ((subject - 1) // 10) * 10 + 1
-    return f"Gait120_{start:03d}_to_{start + 9:03d}"
 
 
 def _parse_int_ranges(value: str, *, lower: int, upper: int) -> list[int]:
@@ -169,308 +118,97 @@ def _parse_int_ranges(value: str, *, lower: int, upper: int) -> list[int]:
 def load_gait120_trc(path: str | Path) -> TrcData:
     """Read one Gait120 TRC and convert its Y-up coordinates to Z-up metres.
 
-    Gait120's files use ``X=lateral, Y=up, Z=progression``.  The existing
-    level-walking C3Ds in ``Gait120-EMG`` encode the same samples as
-    ``[X, -Z, Y]``.  Applying that exact transform keeps the new non-flat
-    motions in the coordinate system already validated by the SMPL fitter and
-    expected by TERRA.
+    Gait120 uses X=lateral, Y=up, Z=progression. Convert to Z-up coordinates
+    with [X, -Z, Y] before surface fitting.
     """
 
     return load_trc(path, up_axis="y")
 
 
-def _mat_record(value: Any) -> np.void:
-    current = value
-    while isinstance(current, np.ndarray) and current.size == 1:
-        current = current.reshape(-1)[0]
-    if not isinstance(current, np.void) or current.dtype.names is None:
-        raise ValueError(f"Expected a scalar MATLAB struct, got {type(current).__name__}")
-    return current
-
-
-def _numeric_mat_value(value: Any) -> np.ndarray:
-    current = value
-    while isinstance(current, np.ndarray) and current.dtype == object and current.size == 1:
-        current = current.reshape(-1)[0]
-    return np.asarray(current, dtype=np.float64)
-
-
-def _emg_step_metadata(movement_record: np.void, trial: int, step: int) -> dict[str, Any]:
-    trial_name = f"Trial{trial:02d}"
-    step_name = f"Step{step:02d}"
-    if trial_name not in (movement_record.dtype.names or ()):
-        raise KeyError(trial_name)
-    trial_record = _mat_record(movement_record[trial_name])
-    if step_name not in (trial_record.dtype.names or ()):
-        raise KeyError(f"{trial_name}/{step_name}")
-    step_record = _mat_record(trial_record[step_name])
-    sample_counts_by_field: dict[str, list[int]] = {}
-    channels_by_field: dict[str, tuple[str, ...]] = {}
-    all_finite = True
-    for field in ("EMGs_interpolated", "EMGs_norm"):
-        if field not in (step_record.dtype.names or ()):
-            raise KeyError(f"{trial_name}/{step_name}/{field}")
-        emg_record = _mat_record(step_record[field])
-        channels = tuple(emg_record.dtype.names or ())
-        channels_by_field[field] = channels
-        sample_counts_by_field[field] = []
-        for channel in channels:
-            values = _numeric_mat_value(emg_record[channel])
-            sample_counts_by_field[field].append(int(values.size))
-            all_finite &= bool(values.size and np.isfinite(values).all())
-    channels = channels_by_field["EMGs_interpolated"]
-    sample_counts = sample_counts_by_field["EMGs_interpolated"]
-    native_counts = sample_counts_by_field["EMGs_norm"]
-    return {
-        "channels": channels,
-        "samples_min": min(sample_counts, default=0),
-        "samples_max": max(sample_counts, default=0),
-        "native_samples_min": min(native_counts, default=0),
-        "native_samples_max": max(native_counts, default=0),
-        "all_finite": all_finite,
-        "valid": (
-            channels == EXPECTED_EMG_CHANNELS
-            and channels_by_field["EMGs_norm"] == EXPECTED_EMG_CHANNELS
-            and sample_counts == [101] * len(EXPECTED_EMG_CHANNELS)
-            and bool(native_counts)
-            and min(native_counts) > 0
-            and len(set(native_counts)) == 1
-            and all_finite
-        ),
-    }
-
-
-def _emg_step_values(movement_record: np.void, trial: int, step: int) -> tuple[tuple[str, ...], np.ndarray]:
-    """Return one processed step as ``(samples, channels)`` float32 values."""
-
-    trial_name = f"Trial{trial:02d}"
-    step_name = f"Step{step:02d}"
-    if trial_name not in (movement_record.dtype.names or ()):
-        raise KeyError(trial_name)
-    trial_record = _mat_record(movement_record[trial_name])
-    if step_name not in (trial_record.dtype.names or ()):
-        raise KeyError(f"{trial_name}/{step_name}")
-    step_record = _mat_record(trial_record[step_name])
-    if "EMGs_interpolated" not in (step_record.dtype.names or ()):
-        raise KeyError(f"{trial_name}/{step_name}/EMGs_interpolated")
-    emg_record = _mat_record(step_record["EMGs_interpolated"])
-    channels = tuple(emg_record.dtype.names or ())
-    arrays = [_numeric_mat_value(emg_record[channel]).reshape(-1) for channel in channels]
-    lengths = {array.size for array in arrays}
-    if channels != EXPECTED_EMG_CHANNELS:
-        raise ValueError(f"Unexpected EMG channels: {channels}")
-    if lengths != {101}:
-        raise ValueError(f"Expected 101 interpolated samples per channel, got {sorted(lengths)}")
-    values = np.stack(arrays, axis=-1).astype(np.float32)
-    if not np.isfinite(values).all():
-        raise ValueError("EMG values contain NaN or infinity")
-    return channels, values
-
-
-def _emg_native_step_values(
-    movement_record: np.void,
-    trial: int,
-    step: int,
-) -> tuple[tuple[str, ...], np.ndarray]:
-    """Return the MVC-normalized EMG envelope at its native 2 kHz clock."""
-
-    trial_name = f"Trial{trial:02d}"
-    step_name = f"Step{step:02d}"
-    trial_record = _mat_record(movement_record[trial_name])
-    step_record = _mat_record(trial_record[step_name])
-    emg_record = _mat_record(step_record["EMGs_norm"])
-    channels = tuple(emg_record.dtype.names or ())
-    arrays = [_numeric_mat_value(emg_record[channel]).reshape(-1) for channel in channels]
-    lengths = {array.size for array in arrays}
-    if channels != EXPECTED_EMG_CHANNELS or len(lengths) != 1:
-        raise ValueError(f"Unexpected native EMG layout: channels={channels}, lengths={sorted(lengths)}")
-    values = np.stack(arrays, axis=-1).astype(np.float32)
-    if not len(values) or not np.isfinite(values).all():
-        raise ValueError("Native EMG is empty or contains NaN/infinity")
-    return channels, values
-
-
-def _load_subject_emg_metadata(emg_path: Path, movements: tuple[str, ...]) -> dict[tuple[str, int, int], dict]:
-    if not emg_path.exists():
-        return {}
-    loaded = loadmat(emg_path, variable_names=list(movements), struct_as_record=True, squeeze_me=False)
-    output: dict[tuple[str, int, int], dict] = {}
-    for movement in movements:
-        if movement not in loaded:
-            continue
-        movement_record = _mat_record(loaded[movement])
-        for trial in range(1, 6):
-            for step in MOVEMENT_METADATA[movement].steps:
-                try:
-                    output[(movement, trial, step)] = _emg_step_metadata(movement_record, trial, step)
-                except (KeyError, ValueError, TypeError, IndexError) as exc:
-                    output[(movement, trial, step)] = {"valid": False, "error": str(exc)}
-    return output
-
-
 def inspect_dataset(
     *,
     original_root: Path,
-    emg_root: Path,
     output_root: Path,
     subjects: list[int],
     movements: tuple[str, ...],
     trials: list[int],
 ) -> tuple[list[StepRecord], list[ClipRecord], dict]:
+    """Discover usable marker steps and report missing or corrupt recordings."""
     output_root.mkdir(parents=True, exist_ok=True)
-    step_records: list[StepRecord] = []
-
+    step_records = []
+    grouped = defaultdict(list)
     for subject in subjects:
-        emg_path = emg_root / _subject_block(subject) / f"S{subject:03d}" / "EMG" / "ConvertedData.mat"
-        try:
-            emg_metadata = _load_subject_emg_metadata(emg_path, movements)
-            emg_load_error = ""
-        except Exception as exc:  # keep inspecting kinematics when one MAT file is corrupt
-            emg_metadata = {}
-            emg_load_error = f"{type(exc).__name__}: {exc}"
-
-        subject_root = original_root / f"S{subject:03d}"
         for movement in movements:
-            movement_spec = MOVEMENT_METADATA[movement]
             for trial in trials:
-                for step in movement_spec.steps:
-                    trc_path = (
-                        subject_root / "MotionCapture" / movement / "TRC" / f"Trial{trial:02d}" / f"Step{step:02d}.trc"
+                for step in MOVEMENT_METADATA[movement].steps:
+                    path = (
+                        original_root
+                        / f"S{subject:03d}"
+                        / "MotionCapture"
+                        / movement
+                        / "TRC"
+                        / f"Trial{trial:02d}"
+                        / f"Step{step:02d}.trc"
                     )
-                    mot_path = (
-                        subject_root / "MotionCapture" / movement / "MOT" / f"Trial{trial:02d}" / f"Step{step:02d}.mot"
-                    )
-                    record = StepRecord(
-                        subject=subject,
-                        movement=movement,
-                        trial=trial,
-                        step=step,
-                        trc_path=str(trc_path),
-                        mot_path=str(mot_path),
-                        emg_path=str(emg_path),
-                        trc_exists=trc_path.exists(),
-                        mot_exists=mot_path.exists(),
-                        emg_exists=emg_path.exists(),
-                    )
-                    errors: list[str] = []
-                    if trc_path.exists():
+                    record = StepRecord(subject, movement, trial, step, str(path), trc_exists=path.is_file())
+                    if record.trc_exists:
                         try:
-                            trc = load_gait120_trc(trc_path)
+                            trc = load_gait120_trc(path)
                             record.trc_valid = True
                             record.trc_frames = len(trc.positions)
                             record.marker_count = len(trc.labels)
                             record.marker_fps = trc.fps
                         except Exception as exc:
-                            errors.append(f"TRC {type(exc).__name__}: {exc}")
-                    emg_step = emg_metadata.get((movement, trial, step))
-                    if emg_step is not None:
-                        record.emg_valid = bool(emg_step.get("valid"))
-                        record.emg_channels = len(emg_step.get("channels", ()))
-                        record.emg_samples_min = int(emg_step.get("samples_min", 0))
-                        record.emg_samples_max = int(emg_step.get("samples_max", 0))
-                        record.emg_native_samples_min = int(emg_step.get("native_samples_min", 0))
-                        record.emg_native_samples_max = int(emg_step.get("native_samples_max", 0))
-                        record.emg_all_finite = bool(emg_step.get("all_finite"))
-                        if record.trc_valid:
-                            expected_native = round(record.trc_frames * GAIT120_EMG_FPS / record.marker_fps)
-                            if (
-                                record.emg_native_samples_min != expected_native
-                                or record.emg_native_samples_max != expected_native
-                            ):
-                                record.emg_valid = False
-                                errors.append(
-                                    f"EMG native samples {record.emg_native_samples_min}-"
-                                    f"{record.emg_native_samples_max}, expected {expected_native}"
-                                )
-                        if emg_step.get("error"):
-                            errors.append(f"EMG {emg_step['error']}")
-                    elif emg_load_error:
-                        errors.append(f"EMG {emg_load_error}")
-                    record.usable_pair = record.trc_valid and record.emg_valid
-                    record.error = "; ".join(errors)
+                            record.error = f"TRC {type(exc).__name__}: {exc}"
                     step_records.append(record)
-
-    clips: list[ClipRecord] = []
-    grouped: dict[tuple[int, str, int], list[StepRecord]] = defaultdict(list)
-    for record in step_records:
-        grouped[(record.subject, record.movement, record.trial)].append(record)
+                    grouped[(subject, movement, trial)].append(record)
+    clips = []
     for (subject, movement, trial), steps in sorted(grouped.items()):
-        paired = sorted((record for record in steps if record.usable_pair), key=lambda record: record.step)
+        paired = sorted((row for row in steps if row.trc_valid), key=lambda row: row.step)
         if not paired:
             continue
-        rel = Path("Gait120") / f"S{subject:03d}" / movement / f"Trial{trial:02d}"
-        marker_archive = output_root / ".markers" / rel / "AllSteps_markers.npz"
-        emg_archive = output_root / rel / "AllSteps_emg.npz"
-        output_path = output_root / rel / "AllSteps_stageii.npz"
-        biomechanics_archive = biomechanics_path(output_path)
-        motion = str(rel / "AllSteps_stageii")
+        relative = Path("Gait120") / f"S{subject:03d}" / movement / f"Trial{trial:02d}"
+        spec = MOVEMENT_METADATA[movement]
         clips.append(
             ClipRecord(
                 subject=subject,
                 movement=movement,
                 trial=trial,
-                paired_steps=";".join(str(record.step) for record in paired),
-                marker_archive=str(marker_archive),
-                emg_archive=str(emg_archive),
-                output_path=str(output_path),
-                motion=motion,
-                emg_path=paired[0].emg_path,
-                trc_paths=";".join(record.trc_path for record in paired),
-                mot_paths=";".join(record.mot_path for record in paired if record.mot_exists),
-                expected_family=MOVEMENT_METADATA[movement].expected_family,
-                terrain_class=MOVEMENT_METADATA[movement].terrain_class,
-                biomechanics_archive=str(biomechanics_archive),
+                paired_steps=";".join(str(row.step) for row in paired),
+                marker_archive=str(output_root / ".markers" / relative / "AllSteps_markers.npz"),
+                output_path=str(output_root / relative / "AllSteps_stageii.npz"),
+                motion=(relative / "AllSteps_stageii").as_posix(),
+                trc_paths=";".join(row.trc_path for row in paired),
+                expected_family=spec.expected_family,
+                terrain_class=spec.terrain_class,
                 role="calibration" if movement == "LevelWalking" else "retarget",
             )
         )
-
-    summary_by_movement = {}
+    by_movement = {}
     for movement in movements:
         rows = [row for row in step_records if row.movement == movement]
         movement_clips = [clip for clip in clips if clip.movement == movement]
-        summary_by_movement[movement] = {
-            "expected_steps": len(subjects) * len(trials) * len(MOVEMENT_METADATA[movement].steps),
+        by_movement[movement] = {
+            "expected_steps": len(rows),
             "trc_steps": sum(row.trc_exists for row in rows),
             "valid_trc_steps": sum(row.trc_valid for row in rows),
-            "mot_steps": sum(row.mot_exists for row in rows),
-            "valid_emg_steps": sum(row.emg_valid for row in rows),
-            "paired_marker_emg_steps": sum(row.usable_pair for row in rows),
-            "paired_clips": len(movement_clips),
-            "subjects_with_paired_clip": len({clip.subject for clip in movement_clips}),
-            "complete_subjects_five_trials": sum(
-                all(
-                    any(clip.subject == subject and clip.movement == movement and clip.trial == trial for clip in clips)
-                    for trial in trials
-                )
-                for subject in subjects
-            ),
+            "clips": len(movement_clips),
+            "subjects_with_clip": len({clip.subject for clip in movement_clips}),
         }
-
     report = {
         "report_version": REPORT_VERSION,
         "original_root": str(original_root.resolve()),
-        "emg_root": str(emg_root.resolve()),
         "output_root": str(output_root.resolve()),
         "subjects_requested": subjects,
         "movements": list(movements),
         "trials": trials,
-        "expected_emg_channels": list(EXPECTED_EMG_CHANNELS),
         "summary": {
             "original_subject_directories": sum((original_root / f"S{subject:03d}").is_dir() for subject in subjects),
-            "converted_emg_files": sum(
-                (emg_root / _subject_block(subject) / f"S{subject:03d}" / "EMG" / "ConvertedData.mat").is_file()
-                for subject in subjects
-            ),
-            "expected_steps": len(subjects)
-            * len(trials)
-            * sum(len(MOVEMENT_METADATA[movement].steps) for movement in movements),
+            "expected_steps": len(step_records),
             "valid_trc_steps": sum(row.trc_valid for row in step_records),
-            "mot_steps": sum(row.mot_exists for row in step_records),
-            "valid_emg_steps": sum(row.emg_valid for row in step_records),
-            "paired_marker_emg_steps": sum(row.usable_pair for row in step_records),
-            "paired_clips": len(clips),
+            "clips": len(clips),
         },
-        "by_movement": summary_by_movement,
+        "by_movement": by_movement,
     }
     _write_csv(output_root / "steps.csv", [asdict(row) for row in step_records])
     _write_manifest(_progress_manifest(output_root), clips, output_root=output_root)
@@ -502,7 +240,7 @@ def _write_manifest(path: Path, clips: list[ClipRecord], *, output_root: Path) -
     rows = []
     for clip in clips:
         row = asdict(clip)
-        for field_name in ("marker_archive", "emg_archive", "output_path", "biomechanics_archive"):
+        for field_name in ("marker_archive", "output_path"):
             if not row[field_name]:
                 continue
             value = Path(row[field_name])
@@ -579,328 +317,6 @@ def prepare_marker_archives(clips: list[ClipRecord], *, redo: bool = False) -> N
             print(f"Prepared marker archives: {index}/{len(clips)}", flush=True)
 
 
-def prepare_emg_archives(clips: list[ClipRecord], *, redo: bool = False) -> None:
-    """Export paired processed EMG without repeatedly loading the large MAT files."""
-
-    grouped: dict[int, list[ClipRecord]] = defaultdict(list)
-    for clip in clips:
-        grouped[clip.subject].append(clip)
-
-    completed = 0
-    for _subject, subject_clips in sorted(grouped.items()):
-        emg_path = Path(subject_clips[0].emg_path)
-        movements = sorted({clip.movement for clip in subject_clips})
-        loaded = loadmat(emg_path, variable_names=movements, struct_as_record=True, squeeze_me=False)
-        movement_records = {movement: _mat_record(loaded[movement]) for movement in movements}
-        for clip in subject_clips:
-            archive_path = Path(clip.emg_archive)
-            if archive_path.exists() and not redo:
-                try:
-                    _validate_emg_file(archive_path, expected_steps=clip.paired_steps)
-                    completed += 1
-                    continue
-                except Exception:
-                    pass
-            steps = np.asarray([int(value) for value in clip.paired_steps.split(";") if value], dtype=np.int8)
-            channel_names: tuple[str, ...] | None = None
-            step_values = []
-            for step in steps:
-                channels, values = _emg_step_values(movement_records[clip.movement], clip.trial, int(step))
-                if channel_names is not None and channels != channel_names:
-                    raise ValueError(f"EMG channel order differs within {clip.motion}")
-                channel_names = channels
-                step_values.append(values)
-            archive_path.parent.mkdir(parents=True, exist_ok=True)
-            tmp = archive_path.with_name(f".{archive_path.name}.tmp")
-            with tmp.open("wb") as fh:
-                np.savez_compressed(
-                    fh,
-                    emg=np.stack(step_values),
-                    channels=np.asarray(channel_names),
-                    steps=steps,
-                    samples_per_step=np.array(101, dtype=np.int64),
-                    source_mat=np.array(str(emg_path.resolve())),
-                    movement=np.array(clip.movement),
-                    trial=np.array(clip.trial, dtype=np.int64),
-                    archive_version=np.array(1, dtype=np.int64),
-                )
-            tmp.replace(archive_path)
-            completed += 1
-        if completed % 100 == 0 or completed == len(clips):
-            print(f"Prepared EMG archives: {completed}/{len(clips)}", flush=True)
-
-
-def _load_gait120_mot(path: Path) -> tuple[np.ndarray, tuple[str, ...], np.ndarray]:
-    lines = path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
-    try:
-        end_header = next(index for index, line in enumerate(lines) if line.strip().casefold() == "endheader")
-    except StopIteration as exc:
-        raise ValueError("MOT has no endheader") from exc
-    names = tuple(lines[end_header + 1].split())
-    values = np.loadtxt(lines[end_header + 2 :], dtype=np.float64, ndmin=2)
-    if not names or values.shape[1] != len(names) or names[0] != "time":
-        raise ValueError(f"Invalid MOT table: {len(names)} names, shape {values.shape}")
-    if not np.isfinite(values).all() or np.any(np.diff(values[:, 0]) <= 0):
-        raise ValueError("MOT timestamps/values are non-finite or unordered")
-    return values[:, 0], names, values
-
-
-def _z_up(values: np.ndarray) -> np.ndarray:
-    transformed = np.asarray(values)[..., (0, 2, 1)].copy()
-    transformed[..., 1] *= -1.0
-    return transformed
-
-
-def _gait120_marker_timeline(
-    trc_paths: list[Path],
-) -> tuple[np.ndarray, np.ndarray, tuple[str, ...], float]:
-    loaded = [load_gait120_trc(path) for path in trc_paths]
-    positions = []
-    times = []
-    last_frame = None
-    for trc in loaded:
-        if trc.labels != loaded[0].labels or not np.isclose(trc.fps, loaded[0].fps):
-            raise ValueError("Gait120 step marker layouts or rates disagree")
-        keep = np.ones(len(trc.frame_numbers), dtype=bool)
-        if last_frame is not None:
-            keep &= trc.frame_numbers > last_frame
-        positions.append(trc.positions[keep])
-        times.append(trc.times[keep])
-        if keep.any():
-            last_frame = int(trc.frame_numbers[keep][-1])
-    marker_times = np.concatenate(times)
-    if np.any(np.diff(marker_times) <= 0):
-        raise ValueError("Combined Gait120 marker timestamps are not strictly increasing")
-    return np.concatenate(positions), marker_times, loaded[0].labels, loaded[0].fps
-
-
-def _gait120_emg(
-    clip: ClipRecord,
-    movement_record: np.void,
-    marker_times: np.ndarray,
-) -> dict[str, Any]:
-    trc_paths = [Path(value) for value in clip.trc_paths.split(";") if value]
-    steps = [int(value) for value in clip.paired_steps.split(";") if value]
-    if len(trc_paths) != len(steps):
-        raise ValueError(f"TRC/step counts disagree for {clip.motion}")
-    chunks = []
-    timestamps = []
-    channel_names = None
-    native_fps = None
-    last_time = None
-    for step, trc_path in zip(steps, trc_paths, strict=True):
-        trc = load_gait120_trc(trc_path)
-        channels, values = _emg_native_step_values(movement_record, clip.trial, step)
-        ratio = len(values) / len(trc.positions)
-        samples_per_marker = round(ratio)
-        if not np.isclose(ratio, samples_per_marker) or samples_per_marker < 1:
-            raise ValueError(f"EMG/marker ratio is {ratio:g} for {trc_path}, expected a positive integer")
-        step_fps = trc.fps * samples_per_marker
-        if not np.isclose(step_fps, GAIT120_EMG_FPS):
-            raise ValueError(f"Native EMG rate is {step_fps:g} Hz, expected {GAIT120_EMG_FPS:g} Hz")
-        if native_fps is not None and not np.isclose(step_fps, native_fps):
-            raise ValueError("Native EMG rates disagree between paired steps")
-        native_fps = step_fps
-        step_times = trc.times[0] + np.arange(len(values), dtype=np.float64) / step_fps
-        keep = np.ones(len(step_times), dtype=bool) if last_time is None else step_times > last_time + 1e-10
-        chunks.append(values[keep])
-        timestamps.append(step_times[keep])
-        if keep.any():
-            last_time = float(step_times[keep][-1])
-        if channel_names is not None and channels != channel_names:
-            raise ValueError("Native EMG channel order differs between steps")
-        channel_names = channels
-    assert native_fps is not None and channel_names is not None
-    emg_native = np.concatenate(chunks)
-    emg_time = np.concatenate(timestamps) - marker_times[0]
-    clock, _ = motion_clock(clip.output_path)
-    return {
-        "emg_available": np.array(True),
-        "emg": resample_linear(emg_time, emg_native, clock),
-        "emg_native": emg_native,
-        "emg_native_time_s": emg_time,
-        "emg_channels": np.asarray(channel_names),
-        "emg_muscles": np.asarray([name.replace("Gastrocnemuis", "Gastrocnemius") for name in channel_names]),
-        "emg_channel_types": np.asarray(["muscle"] * len(channel_names)),
-        "emg_channel_sides": np.asarray(["right"] * len(channel_names)),
-        "emg_units": np.array("dimensionless MVC-normalized envelope"),
-        "emg_processing": np.array("release EMGs_norm at native rate; linear sampling on motion clock"),
-        "emg_source_paths": np.asarray([str(Path(clip.emg_path).resolve())]),
-    }
-
-
-def _gait120_plate_channels(names: tuple[str, ...]) -> list[int]:
-    plates = sorted(
-        {int(match.group(1)) for name in names if (match := re.fullmatch(r"ground_force(\d+)_vx", name)) is not None}
-    )
-    if not plates:
-        raise ValueError("MOT has no ground_force*_vx columns")
-    return plates
-
-
-def _gait120_grf(
-    clip: ClipRecord,
-    marker_positions: np.ndarray,
-    marker_times: np.ndarray,
-    marker_labels: tuple[str, ...],
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    mot_paths = [Path(value) for value in clip.mot_paths.split(";") if value and Path(value).is_file()]
-    clock, _ = motion_clock(clip.output_path)
-    if not mot_paths:
-        return empty_grf(len(clock)), {
-            "grf_recorded": np.zeros(len(clock), dtype=bool),
-            "grf_recorded_native": np.empty(0, dtype=bool),
-        }
-    loaded = [_load_gait120_mot(path) for path in mot_paths]
-    plates = _gait120_plate_channels(loaded[0][1])
-    if any(_gait120_plate_channels(names) != plates for _time, names, _values in loaded):
-        raise ValueError("Ground-force plate columns disagree between steps")
-    native_fps_values = [1.0 / float(np.median(np.diff(times))) for times, _names, _values in loaded]
-    native_fps = float(np.median(native_fps_values))
-    if not all(np.isclose(value, native_fps, rtol=1e-5) for value in native_fps_values):
-        raise ValueError(f"Ground-force sample rates disagree: {native_fps_values}")
-    samples = round((marker_times[-1] - marker_times[0]) * native_fps) + 1
-    native_time = np.arange(samples, dtype=np.float64) / native_fps
-    force = np.zeros((samples, len(plates), 3), dtype=np.float32)
-    moment = np.zeros_like(force)
-    cop = np.zeros_like(force)
-    recorded = np.zeros(samples, dtype=bool)
-    for absolute_time, names, values in loaded:
-        indices = np.rint((absolute_time - marker_times[0]) * native_fps).astype(np.int64)
-        in_range = (indices >= 0) & (indices < samples)
-        indices = indices[in_range]
-        values = values[in_range]
-        column = {name: index for index, name in enumerate(names)}
-        for plate_index, plate in enumerate(plates):
-            force[indices, plate_index] = _z_up(values[:, [column[f"ground_force{plate}_v{axis}"] for axis in "xyz"]])
-            cop[indices, plate_index] = _z_up(values[:, [column[f"ground_force{plate}_p{axis}"] for axis in "xyz"]])
-            moment[indices, plate_index] = _z_up(values[:, [column[f"ground_torque{plate}_{axis}"] for axis in "xyz"]])
-        recorded[indices] = True
-    valid = recorded[:, None] & (np.linalg.norm(force, axis=-1) > 20.0)
-
-    feet = {}
-    for side, prefix in (("left", "L"), ("right", "R")):
-        indices = [marker_labels.index(f"{prefix}HEE"), marker_labels.index(f"{prefix}TOE")]
-        feet[side] = np.nanmean(marker_positions[:, indices], axis=1)
-    absolute_native_time = marker_times[0] + native_time
-    feet_native = {
-        side: np.stack(
-            [np.interp(absolute_native_time, marker_times, centres[:, axis]) for axis in range(3)],
-            axis=-1,
-        )
-        for side, centres in feet.items()
-    }
-    labels = []
-    assignments = []
-    for plate_index, plate in enumerate(plates):
-        active = valid[:, plate_index]
-        if not active.any():
-            label = f"plate{plate}"
-            distances = {"left": float("nan"), "right": float("nan")}
-        else:
-            distances = {
-                side: float(np.nanmedian(np.linalg.norm(cop[active, plate_index] - centre[active], axis=-1)))
-                for side, centre in feet_native.items()
-            }
-            ordered = sorted(distances, key=distances.get)
-            label = "combined" if distances[ordered[1]] - distances[ordered[0]] < 0.10 else ordered[0]
-        if label in labels:
-            label = f"{label}_plate{plate}"
-        labels.append(label)
-        assignments.append(
-            f"plate{plate}:{label}:left_distance_m={distances['left']:.6g}:right_distance_m={distances['right']:.6g}"
-        )
-    aligned_force = resample_linear(native_time, force, clock)
-    aligned_moment = resample_linear(native_time, moment, clock)
-    aligned_cop = resample_linear(native_time, cop, clock)
-    aligned_recorded = resample_linear(native_time, recorded.astype(np.float32), clock) > 0.5
-    aligned_valid = aligned_recorded[:, None] & (np.linalg.norm(aligned_force, axis=-1) > 20.0)
-    return (
-        {
-            "grf_available": np.array(True),
-            "grf_cop_available": np.array(True),
-            "grf_force": aligned_force,
-            "grf_moment": aligned_moment,
-            "grf_cop": aligned_cop,
-            "grf_valid": aligned_valid,
-            "grf_force_native": force,
-            "grf_moment_native": moment,
-            "grf_cop_native": cop,
-            "grf_valid_native": valid,
-            "grf_native_time_s": native_time,
-            "grf_channels": np.asarray(labels),
-            "grf_source_paths": np.asarray([str(path.resolve()) for path in mot_paths]),
-        },
-        {
-            "grf_platform_assignment": np.asarray(assignments),
-            "grf_recorded": aligned_recorded,
-            "grf_recorded_native": recorded,
-            "grf_contact_threshold_n": np.array(20.0, dtype=np.float32),
-        },
-    )
-
-
-def prepare_biomechanics_archives(clips: list[ClipRecord], *, redo: bool = False) -> None:
-    """Create native and frame-synchronized EMG/GRF sidecars for fitted clips."""
-
-    grouped: dict[int, list[ClipRecord]] = defaultdict(list)
-    for clip in clips:
-        grouped[clip.subject].append(clip)
-    completed = 0
-    for _subject, subject_clips in sorted(grouped.items()):
-        eligible = [clip for clip in subject_clips if Path(clip.output_path).is_file()]
-        if not eligible:
-            continue
-        emg_path = Path(eligible[0].emg_path)
-        movements = sorted({clip.movement for clip in eligible})
-        loaded = loadmat(emg_path, variable_names=movements, struct_as_record=True, squeeze_me=False)
-        movement_records = {movement: _mat_record(loaded[movement]) for movement in movements}
-        for clip in eligible:
-            output = Path(clip.biomechanics_archive or biomechanics_path(clip.output_path))
-            clip.biomechanics_archive = str(output)
-            if output.exists() and not redo:
-                try:
-                    validate_biomechanics(output, motion_path=clip.output_path)
-                    completed += 1
-                    continue
-                except Exception:
-                    pass
-            trc_paths = [Path(value) for value in clip.trc_paths.split(";") if value]
-            marker_positions, marker_times, marker_labels, _marker_fps = _gait120_marker_timeline(trc_paths)
-            clock, fps = motion_clock(clip.output_path)
-            emg = _gait120_emg(clip, movement_records[clip.movement], marker_times)
-            grf, grf_metadata = _gait120_grf(
-                clip,
-                marker_positions,
-                marker_times,
-                marker_labels,
-            )
-            write_biomechanics(
-                output,
-                dataset="gait120",
-                motion=clip.motion,
-                motion_time_s=clock,
-                motion_fps=fps,
-                synchronization=(
-                    "TRC, normalized EMG, and force MOT share absolute capture timestamps; "
-                    "overlapping paired-step samples are de-duplicated"
-                ),
-                emg=emg,
-                grf=grf,
-                metadata={
-                    **grf_metadata,
-                    "source_start_time_s": np.array(marker_times[0], dtype=np.float64),
-                    "motion_source_frame": (
-                        int(load_gait120_trc(trc_paths[0]).frame_numbers[0])
-                        + np.rint(clock * _marker_fps).astype(np.int64)
-                    ),
-                    "source_trc_paths": np.asarray([str(path.resolve()) for path in trc_paths]),
-                },
-            )
-            completed += 1
-        print(f"Prepared biomechanical sidecars: {completed}/{sum(map(len, grouped.values()))}", flush=True)
-
-
 def _validate_smplh_file(path: Path, *, enforce_knee_hinge: bool = False) -> dict[str, Any]:
     with np.load(path, allow_pickle=False) as data:
         required = {"poses", "trans", "betas", "gender", "mocap_framerate"}
@@ -927,27 +343,6 @@ def _validate_smplh_file(path: Path, *, enforce_knee_hinge: bool = False) -> dic
     if not np.isfinite(fps) or fps <= 0:
         raise ValueError(f"invalid fps={fps}")
     return {"frames": int(poses.shape[0]), "fps": fps}
-
-
-def _validate_emg_file(path: Path, *, expected_steps: str) -> dict[str, Any]:
-    with np.load(path, allow_pickle=False) as data:
-        required = {"emg", "channels", "steps", "samples_per_step", "source_mat"}
-        missing = sorted(required - set(data.files))
-        if missing:
-            raise ValueError(f"missing fields: {', '.join(missing)}")
-        emg = np.asarray(data["emg"])
-        channels = tuple(str(value) for value in np.asarray(data["channels"]).reshape(-1))
-        steps = np.asarray(data["steps"], dtype=np.int64).reshape(-1)
-    expected = np.asarray([int(value) for value in expected_steps.split(";") if value], dtype=np.int64)
-    if channels != EXPECTED_EMG_CHANNELS:
-        raise ValueError(f"unexpected channel order: {channels}")
-    if not np.array_equal(steps, expected):
-        raise ValueError(f"steps {steps.tolist()} do not match {expected.tolist()}")
-    if emg.shape != (len(steps), 101, len(EXPECTED_EMG_CHANNELS)):
-        raise ValueError(f"emg has shape {emg.shape}")
-    if not np.isfinite(emg).all():
-        raise ValueError("emg contains non-finite values")
-    return {"steps": len(steps), "samples": int(emg.shape[0] * emg.shape[1])}
 
 
 def _fit_subject(job: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1156,123 +551,6 @@ def _clip_sort_key(clip: ClipRecord) -> tuple[int, int, int]:
     return clip.subject, TARGET_MOVEMENTS.index(clip.movement), clip.trial
 
 
-def _stable_clip_key(seed: str, clip: ClipRecord) -> bytes:
-    return hashlib.sha256(f"{seed}:{clip.motion}".encode()).digest()
-
-
-def collect_chair_conversion_clips(
-    clips: list[ClipRecord],
-) -> tuple[list[ClipRecord], list[ClipRecord]]:
-    """Return every chair target that has a Trial01 walking calibration.
-
-    Conversion deliberately happens before cohort selection: poor target fits
-    and every target belonging to a poor subject calibration can therefore be
-    excluded without reducing or biasing the published cohort.
-
-    Returns ``(targets, targets_and_calibrations)``.
-    """
-
-    calibrations = {clip.subject: clip for clip in clips if clip.movement == "LevelWalking" and clip.trial == 1}
-    targets = [clip for clip in clips if clip.movement in CHAIR_MOVEMENTS and clip.subject in calibrations]
-    for clip in targets:
-        clip.role = "retarget"
-
-    selected_subjects = {clip.subject for clip in targets}
-    selected_calibrations = []
-    for subject in sorted(selected_subjects):
-        calibration = calibrations[subject]
-        calibration.role = "calibration"
-        selected_calibrations.append(calibration)
-    return targets, sorted(targets + selected_calibrations, key=_clip_sort_key)
-
-
-def select_balanced_chair_clips(
-    clips: list[ClipRecord],
-    *,
-    per_movement: int,
-    seed: str = CHAIR_SELECTION_SEED,
-    fit_passed_only: bool = False,
-) -> tuple[list[ClipRecord], list[ClipRecord]]:
-    """Select paired stool transitions with exact direction/trial balance.
-
-    Only subjects with a usable Trial01 level-walking calibration are eligible.
-    Subject counts are balanced across both directions before a stable hash
-    breaks ties, maximizing participant coverage without relying on row order.
-
-    Returns ``(targets, targets_and_calibrations)``.
-    """
-
-    if per_movement <= 0 or per_movement % 5:
-        raise ValueError("chair motions per movement must be positive and divisible by five")
-    if not seed:
-        raise ValueError("chair selection seed must be non-empty")
-
-    calibrations = {
-        clip.subject: clip
-        for clip in clips
-        if clip.movement == "LevelWalking" and clip.trial == 1 and (clip.fit_passed or not fit_passed_only)
-    }
-    subject_counts: Counter[int] = Counter()
-    selected: list[ClipRecord] = []
-    per_trial = per_movement // 5
-    for movement in CHAIR_MOVEMENTS:
-        for trial in range(1, 6):
-            candidates = [
-                clip
-                for clip in clips
-                if clip.movement == movement
-                and clip.trial == trial
-                and clip.subject in calibrations
-                and (clip.fit_passed or not fit_passed_only)
-            ]
-            if len(candidates) < per_trial:
-                qualifier = " successful" if fit_passed_only else ""
-                raise ValueError(
-                    f"Gait120 {movement} Trial{trial:02d} has only {len(candidates)}{qualifier} paired clips "
-                    f"with calibration; cannot select {per_trial}"
-                )
-            for _ in range(per_trial):
-                chosen = min(
-                    candidates,
-                    key=lambda clip: (
-                        subject_counts[clip.subject],
-                        _stable_clip_key(f"{seed}:{movement}", clip),
-                    ),
-                )
-                candidates.remove(chosen)
-                chosen.role = "retarget"
-                selected.append(chosen)
-                subject_counts[chosen.subject] += 1
-
-    selected_subjects = {clip.subject for clip in selected}
-    selected_calibrations = []
-    for subject in sorted(selected_subjects):
-        calibration = calibrations[subject]
-        calibration.role = "calibration"
-        selected_calibrations.append(calibration)
-    return selected, sorted(selected + selected_calibrations, key=_clip_sort_key)
-
-
-def write_chair_selection(path: Path, targets: list[ClipRecord]) -> None:
-    """Publish the exact target-only selection consumed by every later stage."""
-
-    rows = []
-    for clip in targets:
-        rows.append(
-            {
-                "motion": clip.motion,
-                "dataset": "gait120",
-                "subject": f"S{clip.subject:03d}",
-                "movement": clip.movement,
-                "trial": f"Trial{clip.trial:02d}",
-                "terrain_class": clip.terrain_class,
-                "expected_family": clip.expected_family,
-                "calibration_motion": (f"Gait120/S{clip.subject:03d}/LevelWalking/Trial01/AllSteps_stageii"),
-            }
-        )
-    _write_csv(path, rows)
-
-
 def _filter_clips_by_selection_manifest(clips: list[ClipRecord], manifest: Path) -> list[ClipRecord]:
     """Keep explicitly selected Gait120 motions and their subject calibrations."""
     with manifest.open(newline="") as handle:
@@ -1357,8 +635,6 @@ def _apply_fit_quality(
     clips: list[ClipRecord],
     *,
     validation_failures: list[dict],
-    emg_validation_failures: list[dict] | None = None,
-    biomechanics_validation_failures: list[dict] | None = None,
     marker_fit_quality: dict,
 ) -> list[dict]:
     """Set the manifest quality gate and return inspectable rejection rows."""
@@ -1367,10 +643,6 @@ def _apply_fit_quality(
     for label, rows in (("smplh_validation", validation_failures),):
         for row in rows:
             reasons[row["motion"]].append(f"{label}: {row['error']}")
-    for row in emg_validation_failures or []:
-        reasons[row["motion"]].append(f"emg_validation: {row['error']}")
-    for row in biomechanics_validation_failures or []:
-        reasons[row["motion"]].append(f"biomechanics_validation: {row['error']}")
     for motion in marker_fit_quality["missing_metrics"]:
         reasons[motion].append("marker_fit: missing mean marker error")
     threshold = marker_fit_quality["robust_outlier_threshold_mm"]
@@ -1413,130 +685,53 @@ def _apply_fit_quality(
     ]
 
 
-def validate_dataset(
-    clips: list[ClipRecord],
-    *,
-    output_root: Path,
-    publish_manifest: bool = True,
-    chair_per_movement: int | None = None,
-    chair_selection_output: Path | None = None,
-) -> dict:
-    status_counts = Counter(clip.status for clip in clips)
+def validate_dataset(clips: list[ClipRecord], *, output_root: Path, publish_manifest: bool = True) -> dict:
+    """Validate fitted motions and publish both passing and failed manifest rows."""
     failures = []
     frames = 0
     fps_values = set()
-    emg_failures = []
-    valid_emg_files = 0
-    biomechanics_failures = []
-    valid_biomechanics_files = 0
     for clip in clips:
-        path = Path(clip.output_path)
         try:
-            validation = _validate_smplh_file(path)
+            validation = _validate_smplh_file(Path(clip.output_path))
             clip.output_frames = validation["frames"]
             clip.fps = validation["fps"]
             frames += validation["frames"]
             fps_values.add(validation["fps"])
         except Exception as exc:
             failures.append({"motion": clip.motion, "error": f"{type(exc).__name__}: {exc}"})
-        try:
-            _validate_emg_file(Path(clip.emg_archive), expected_steps=clip.paired_steps)
-            valid_emg_files += 1
-        except Exception as exc:
-            emg_failures.append({"motion": clip.motion, "error": f"{type(exc).__name__}: {exc}"})
-        try:
-            sidecar = Path(clip.biomechanics_archive or biomechanics_path(clip.output_path))
-            clip.biomechanics_archive = str(sidecar)
-            validate_biomechanics(sidecar, motion_path=clip.output_path)
-            valid_biomechanics_files += 1
-        except Exception as exc:
-            biomechanics_failures.append({"motion": clip.motion, "error": f"{type(exc).__name__}: {exc}"})
-
-    expected_motions = {clip.motion for clip in clips}
-    actual_motions = {
-        str(path.relative_to(output_root).with_suffix(""))
+    expected = {clip.motion for clip in clips}
+    actual = {
+        path.relative_to(output_root).with_suffix("").as_posix()
         for path in (output_root / "Gait120").glob("S*/**/AllSteps_stageii.npz")
     }
-    marker_fit_quality = _summarize_marker_fit_quality(clips)
-    quality_rejections = _apply_fit_quality(
-        clips,
-        validation_failures=failures,
-        emg_validation_failures=emg_failures,
-        biomechanics_validation_failures=biomechanics_failures,
-        marker_fit_quality=marker_fit_quality,
-    )
-    retarget_clips = [clip for clip in clips if clip.role == "retarget"]
-    calibration_clips = [clip for clip in clips if clip.role == "calibration"]
+    quality = _summarize_marker_fit_quality(clips)
+    rejections = _apply_fit_quality(clips, validation_failures=failures, marker_fit_quality=quality)
+    targets = [clip for clip in clips if clip.role == "retarget"]
+    calibrations = [clip for clip in clips if clip.role == "calibration"]
+    ready = not failures and expected == actual
     report = {
         "manifest_clips": len(clips),
         "valid_smplh_files": len(clips) - len(failures),
-        "valid_paired_emg_files": valid_emg_files,
-        "valid_biomechanics_files": valid_biomechanics_files,
         "total_output_frames": frames,
         "fps_values": sorted(fps_values),
-        "status_counts": dict(sorted(status_counts.items())),
-        "missing_manifest_outputs": sorted(expected_motions - actual_motions),
-        "unexpected_outputs": sorted(actual_motions - expected_motions),
+        "status_counts": dict(sorted(Counter(clip.status for clip in clips).items())),
+        "missing_manifest_outputs": sorted(expected - actual),
+        "unexpected_outputs": sorted(actual - expected),
         "validation_failures": failures,
-        "emg_validation_failures": emg_failures,
-        "biomechanics_validation_failures": biomechanics_failures,
-        "marker_fit_quality": marker_fit_quality,
-        "marker_fit_quality_ready": marker_fit_quality["ready"],
-        "quality_passed_retarget": sum(clip.fit_passed for clip in retarget_clips),
-        "quality_failed_retarget": sum(not clip.fit_passed for clip in retarget_clips),
-        "quality_passed_calibration": sum(clip.fit_passed for clip in calibration_clips),
-        "quality_failed_calibration": sum(not clip.fit_passed for clip in calibration_clips),
-        "conversion_quality_rejections": quality_rejections,
-        "terra_ready": not failures and expected_motions == actual_motions,
+        "marker_fit_quality": quality,
+        "marker_fit_quality_ready": quality["ready"],
+        "quality_passed_retarget": sum(clip.fit_passed for clip in targets),
+        "quality_failed_retarget": sum(not clip.fit_passed for clip in targets),
+        "quality_passed_calibration": sum(clip.fit_passed for clip in calibrations),
+        "quality_failed_calibration": sum(not clip.fit_passed for clip in calibrations),
+        "conversion_quality_rejections": rejections,
+        "terra_ready": ready,
+        "benchmark_ready": ready and not quality["missing_metrics"] and any(clip.fit_passed for clip in targets),
+        "manifest_published": bool(publish_manifest),
     }
-    report["benchmark_ready"] = (
-        report["terra_ready"]
-        and not emg_failures
-        and not biomechanics_failures
-        and not marker_fit_quality["missing_metrics"]
-        and any(clip.fit_passed for clip in retarget_clips)
-    )
-    if chair_per_movement is not None:
-        if chair_selection_output is None:
-            raise ValueError("chair_selection_output is required for chair cohort selection")
-        try:
-            chair_targets, _ = select_balanced_chair_clips(
-                clips,
-                per_movement=chair_per_movement,
-                fit_passed_only=True,
-            )
-        except ValueError as exc:
-            report["chair_selection"] = {
-                "ready": False,
-                "requested_per_movement": chair_per_movement,
-                "selected_targets": 0,
-                "output": str(chair_selection_output),
-                "error": str(exc),
-            }
-            report["benchmark_ready"] = False
-        else:
-            write_chair_selection(chair_selection_output, chair_targets)
-            report["chair_selection"] = {
-                "ready": True,
-                "requested_per_movement": chair_per_movement,
-                "selected_targets": len(chair_targets),
-                "selected_by_movement": dict(sorted(Counter(clip.movement for clip in chair_targets).items())),
-                "selected_by_movement_trial": {
-                    f"{movement}/Trial{trial:02d}": count
-                    for (movement, trial), count in sorted(
-                        Counter((clip.movement, clip.trial) for clip in chair_targets).items()
-                    )
-                },
-                "output": str(chair_selection_output),
-                "error": "",
-            }
-    report["paired_dataset_ready"] = (
-        report["terra_ready"] and not emg_failures and not biomechanics_failures and marker_fit_quality["ready"]
-    )
-    report["manifest_published"] = bool(publish_manifest)
     (output_root / "validation.json").write_text(json.dumps(report, indent=2) + "\n")
-    manifest_path = output_root / "manifest.csv" if report["manifest_published"] else _progress_manifest(output_root)
-    _write_manifest(manifest_path, clips, output_root=output_root)
+    manifest = output_root / "manifest.csv" if publish_manifest else _progress_manifest(output_root)
+    _write_manifest(manifest, clips, output_root=output_root)
     return report
 
 
@@ -1554,12 +749,6 @@ def _build_parser(roots: StorageRoots | None = None) -> argparse.ArgumentParser:
         help="Root containing S001 ... S120 from the original Figshare release",
     )
     parser.add_argument(
-        "--emg-root",
-        type=Path,
-        default=roots.data_root / "Gait120-EMG",
-        help="Root of the processed, SciPy-readable Gait120-EMG dataset",
-    )
-    parser.add_argument(
         "--output-root",
         type=Path,
         default=roots.artifact_root / "gait120" / "smplh",
@@ -1574,21 +763,6 @@ def _build_parser(roots: StorageRoots | None = None) -> argparse.ArgumentParser:
         "--selection-manifest",
         type=Path,
         help="Fit only Gait120 rows in this explicit CSV, plus their calibration motions",
-    )
-    parser.add_argument(
-        "--chair-per-movement",
-        type=int,
-        help=(
-            "Convert every eligible SitToStand and StandToSit clip, then select this many "
-            "successful fits per movement, balanced across trials and subjects"
-        ),
-    )
-    parser.add_argument(
-        "--chair-selection-output",
-        type=Path,
-        help=(
-            "Artifact path for the generated target-only chair selection; defaults to OUTPUT_ROOT/chair_N_selection.csv"
-        ),
     )
     parser.add_argument("--subjects", default="1-120", help="Comma-separated subjects/ranges")
     parser.add_argument("--trials", default="1-5", help="Comma-separated trials/ranges")
@@ -1647,33 +821,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     roots = StorageRoots.from_environment(Path.cwd())
     args = _build_parser(roots).parse_args(arguments)
     args.original_root = roots.resolve_input(args.original_root, base=Path.cwd())
-    args.emg_root = roots.resolve_input(args.emg_root, base=Path.cwd())
     args.output_root = roots.resolve_artifact(args.output_root, base=Path.cwd())
     args.smpl_model_path = roots.resolve_model(args.smpl_model_path, base=Path.cwd())
     args.stage1_state_root = roots.resolve_artifact(args.stage1_state_root, base=Path.cwd())
     args.selection_manifest = roots.resolve_input(args.selection_manifest, base=Path.cwd())
-    args.chair_selection_output = roots.resolve_artifact(args.chair_selection_output, base=Path.cwd())
     assert args.original_root is not None
-    assert args.emg_root is not None
     assert args.output_root is not None
     assert args.smpl_model_path is not None
     subjects = _parse_int_ranges(args.subjects, lower=1, upper=120)
     trials = _parse_int_ranges(args.trials, lower=1, upper=5)
     movements = tuple(args.movements)
-    if args.selection_manifest is not None and args.chair_per_movement is not None:
-        raise SystemExit("--selection-manifest and --chair-per-movement are mutually exclusive")
-    if args.chair_selection_output is not None and args.chair_per_movement is None:
-        raise SystemExit("--chair-selection-output requires --chair-per-movement")
-    if args.chair_per_movement is not None:
-        required = {"LevelWalking", *CHAIR_MOVEMENTS}
-        missing = sorted(required - set(movements))
-        if missing:
-            raise SystemExit("--chair-per-movement requires --movements to include " + ", ".join(missing))
     if args.workers < 1:
         raise SystemExit("--workers must be at least 1")
-    for path, description in ((args.original_root, "original root"), (args.emg_root, "EMG root")):
-        if not path.is_dir():
-            raise SystemExit(f"Gait120 {description} does not exist: {path}")
+    if not args.original_root.is_dir():
+        raise SystemExit(f"Gait120 original root does not exist: {args.original_root}")
     write_git_commit(args.output_root)
 
     if args.device == "auto":
@@ -1689,30 +850,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise SystemExit("--device cuda requested, but torch.cuda.is_available() is false")
 
     started = time.time()
-    print("Inspecting paired Gait120 markers, EMG, and available ground forces...", flush=True)
+    print("Inspecting Gait120 marker recordings...", flush=True)
     _, clips, report = inspect_dataset(
         original_root=args.original_root,
-        emg_root=args.emg_root,
         output_root=args.output_root,
         subjects=subjects,
         movements=movements,
         trials=trials,
     )
-    chair_selection_output = None
     if args.selection_manifest is not None:
         clips = _filter_clips_by_selection_manifest(clips, args.selection_manifest)
         print(
             f"Selection filter: {len(clips)} Gait120 retarget/calibration clips",
-            flush=True,
-        )
-    elif args.chair_per_movement is not None:
-        targets, clips = collect_chair_conversion_clips(clips)
-        chair_selection_output = args.chair_selection_output or (
-            args.output_root / f"chair_{2 * args.chair_per_movement}_selection.csv"
-        )
-        print(
-            f"Chair conversion pool: {len(targets)} targets and {len(clips) - len(targets)} "
-            f"subject calibrations; selection follows fit validation -> {chair_selection_output}",
             flush=True,
         )
     print(json.dumps(report["summary"], indent=2), flush=True)
@@ -1724,8 +873,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     print(f"Preparing {len(clips)} paired marker archives...", flush=True)
     prepare_marker_archives(clips, redo=args.redo)
-    print(f"Preparing {len(clips)} paired EMG archives...", flush=True)
-    prepare_emg_archives(clips, redo=args.redo)
     _write_manifest(_progress_manifest(args.output_root), clips, output_root=args.output_root)
     if args.prepare_only:
         print(f"Preparation complete in {time.time() - started:.1f}s -> {args.output_root}")
@@ -1758,14 +905,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         stage2_torso_frame_weight=args.stage2_torso_frame_weight,
         stage1_state_root=args.stage1_state_root,
     )
-    print("Preparing motion-synchronized EMG/GRF sidecars...", flush=True)
-    prepare_biomechanics_archives(fitted, redo=args.redo)
     report = validate_dataset(
         fitted,
         output_root=args.output_root,
         publish_manifest=args.limit is None,
-        chair_per_movement=args.chair_per_movement if args.limit is None else None,
-        chair_selection_output=chair_selection_output,
     )
     print(json.dumps(report, indent=2), flush=True)
     print(f"Finished in {(time.time() - started) / 60:.1f} min -> {args.output_root}", flush=True)

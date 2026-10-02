@@ -1,14 +1,15 @@
-"""The two registered TERRA reconstruction profiles."""
+"""Fit terrain from normalized SMPL-H motion landmarks."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
 from terra.dataset_pipeline import (
     DatasetConfig,
     MotionRecord,
+    ensure_robot_shape,
     fit_record_terrain,
     load_dataset_config,
     load_motion_records,
@@ -27,6 +28,10 @@ _PROFILE_DISPLAY_NAMES = {
 class TerraMethod:
     dataset_config_path: Path
     profile_name: str = "full"
+    cache_root: Path | None = None
+    model_root: Path | None = None
+    motion_paths: tuple[Path, ...] = ()
+    _shape_ready: bool = field(default=False, init=False, repr=False, compare=False)
     _config: DatasetConfig = field(init=False, repr=False, compare=False)
     _records: dict[str, MotionRecord] = field(init=False, repr=False, compare=False)
 
@@ -37,10 +42,28 @@ class TerraMethod:
         profile = resolve_terra_reconstruction_profile(self.profile_name)
         object.__setattr__(self, "profile_name", profile.cli_name)
         config = load_dataset_config(self.dataset_config_path)
+        if self.cache_root is not None:
+            config = replace(config, cache_root=self.cache_root.expanduser().resolve())
+        if self.model_root is not None:
+            config = replace(config, smpl_model_path=self.model_root.expanduser().resolve())
         if config.terrain_mode != "fit":
             raise ValueError(f"dataset {config.name} does not enable terrain fitting")
         object.__setattr__(self, "_config", config)
-        object.__setattr__(self, "_records", {record.motion: record for record in load_motion_records(config)})
+        if self.motion_paths:
+            if config.manifest_path is not None:
+                raise ValueError(
+                    "--motion requires a dataset without a conversion manifest; use --motions for converted datasets"
+                )
+            records = []
+            for source in self.motion_paths:
+                source = source.expanduser().resolve()
+                if source.suffix != ".npz" or not source.is_file():
+                    raise ValueError(f"motion must be an existing SMPL-H .npz: {source}")
+                relative = source.relative_to(config.input_root)
+                records.append(MotionRecord(relative.with_suffix("").as_posix(), config.name, source))
+        else:
+            records = load_motion_records(config)
+        object.__setattr__(self, "_records", {record.motion: record for record in records})
         object.__setattr__(self, "display_name", _PROFILE_DISPLAY_NAMES[self.profile_name])
         object.__setattr__(self, "description", profile.description)
 
@@ -62,6 +85,9 @@ class TerraMethod:
             raise FileNotFoundError("motion is absent from the converted dataset manifest") from error
         if not record.fit_passed:
             raise ValueError("converted motion is marked fit_passed=false")
+        if not self._shape_ready:
+            ensure_robot_shape(self._config)
+            object.__setattr__(self, "_shape_ready", True)
         return PreparedMotion(record)
 
     def fit(

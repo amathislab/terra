@@ -1,46 +1,14 @@
 """Ownership and separation invariants for TERRA's comparison baselines."""
 
 import os
-from types import MappingProxyType
 
 import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation
 
-from terra.baselines import (
-    BASELINES,
-    GMR_BASELINE,
-    OMNIRETARGET_BASELINE,
-    SMPL_BASELINE,
-    baseline_spec,
-    gmr,
-    omniretarget,
-    smpl,
-)
+from terra.baselines import gmr, omniretarget, smpl
 from terra.baselines.temporal import resample_smplh_motion
 from terra.profiles import active_qp_terms
-
-
-def test_all_three_baselines_have_explicit_terra_owned_definitions():
-    assert tuple(BASELINES) == ("omniretarget", "gmr", "smpl")
-    assert baseline_spec("omniretarget") is OMNIRETARGET_BASELINE
-    assert baseline_spec("gmr") is GMR_BASELINE
-    assert baseline_spec("smpl") is SMPL_BASELINE
-    assert {spec.label for spec in BASELINES.values()} == {
-        "OmniRetarget",
-        "GMR",
-        "MuscleMimic SMPL-fit",
-    }
-    assert "terra" not in BASELINES
-
-
-def test_baseline_configs_are_immutable_and_resolve_by_copy():
-    assert isinstance(GMR_BASELINE.config, MappingProxyType)
-    with pytest.raises(TypeError):
-        GMR_BASELINE.config["solver"] = "other"
-    resolved = GMR_BASELINE.resolved_config({"damping": 0.25})
-    assert resolved["damping"] == 0.25
-    assert GMR_BASELINE.config["damping"] == 0.5
 
 
 def test_gmr_adapter_delegates_with_default_configuration(monkeypatch):
@@ -258,8 +226,3 @@ def test_omniretarget_always_uses_fitted_shape_without_terra_terms():
 
     with pytest.raises(ValueError, match="unknown TERRA solver configuration"):
         resolve_method_profile("omniretarget", {"omniretarget_source_convention": "native"})
-
-
-def test_unknown_baseline_is_rejected():
-    with pytest.raises(ValueError, match="unknown baseline"):
-        baseline_spec("terra")

@@ -31,8 +31,6 @@ experiment:
       first_quarter_reset_probability: 0.25
       trajectory_cache_root: ${oc.env:TERRA_TRAJECTORY_CACHE_ROOT,''}
       trajectory_cache_key: ${terra.motion_selection_hash:train,${oc.env:TERRA_MOTION_SELECTION_RECORD,''}}
-      # Optional dataset-level biomechanics root. When set, Gait120 and
-      # Darmstadt sidecars are aligned to the loaded retargeted trajectories.
       amass_dataset_conf:
         rel_dataset_path: ${terra.motion_selection:train,${oc.env:TERRA_MOTION_SELECTION_RECORD,''}}
         dataset_group: null

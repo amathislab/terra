@@ -29,42 +29,27 @@ only when the terrain itself is defined in normalized landmark coordinates.
 This example needs the
 [AMASS and neutral SMPL-H layout](data.md#the-first-motion-layout), an installed TERRA
 environment, and a `MOTION_FILE` inside `$TERRA_DATA_ROOT/AMASS`. Run it from the
-repository root:
+repository root after the README quickstart:
 
 ```bash
-export MOTION_FILE="/absolute/path/to/your/motion_poses.npz"
-export TERRA_ARTIFACT_ROOT="$HOME/terra-results"
-python - <<'PY'
-import os
-from pathlib import Path
-source = Path(os.environ["MOTION_FILE"]).resolve()
-root = (Path(os.environ["TERRA_DATA_ROOT"]) / "AMASS").resolve()
-if not source.is_file() or not source.is_relative_to(root):
-    raise SystemExit("MOTION_FILE must be an existing .npz below TERRA_DATA_ROOT/AMASS")
-motion_id = source.relative_to(root).with_suffix("").as_posix()
-out = Path(os.environ["TERRA_ARTIFACT_ROOT"]) / "reconstruction"
-out.mkdir(parents=True, exist_ok=True)
-(out / "one-motion.txt").write_text(motion_id + "\n")
-print("Selected:", motion_id)
-PY
-python - <<'PY'
-from pathlib import Path
-from terra.dataset_pipeline import ensure_robot_shape, load_dataset_config
-config = load_dataset_config(Path("src/terra/datasets/configs/amass.toml"))
-print("Shared body-shape cache:", ensure_robot_shape(config))
-PY
 terra reconstruct cohort \
-  --method terra \
-  --motions "$TERRA_ARTIFACT_ROOT/reconstruction/one-motion.txt" \
-  --dataset-config src/terra/datasets/configs/amass.toml \
+  --motion "$MOTION_FILE" \
+  --dataset-config amass \
+  --smpl-model-path "$TERRA_MODEL_ROOT" \
+  --cache-root "$TERRA_ARTIFACT_ROOT/quickstart" \
   --output-dir "$TERRA_ARTIFACT_ROOT/reconstruction/terra"
 ```
 
-The shape step calibrates MyoFullBody to the SMPL-H model and is cached for later runs.
-The AMASS config resolves `data/AMASS` to `TERRA_DATA_ROOT/AMASS` and its model/cache
-paths through the exported roots. The selection file contains IDs **relative to AMASS**,
-without the `.npz` suffix; it is not a list of absolute filenames. A CSV with a `motion`
-column also works.
+The command writes a selection automatically, prepares the fitted body shape if
+needed, and fits terrain. The cache above reuses the quickstart's MyoFullBody
+shape, so it is not fitted twice. `MOTION_FILE` must be below
+`$TERRA_DATA_ROOT/AMASS`.
+
+For several motions, repeat `--motion`, or pass `--motions selection.txt`. A
+selection file contains IDs relative to the configured input root, without the
+`.npz` suffix, for example `KIT/3/upstairs09_poses`. A CSV with a `motion` column
+also works. Converted datasets use `--motions` and their bundled dataset name so
+subject calibration and conversion quality remain available.
 
 ## Read the output
 
@@ -78,12 +63,7 @@ visible in the selected set.
 
 ```bash
 cat "$TERRA_ARTIFACT_ROOT/reconstruction/terra/status.csv"
-python - <<'PY'
-import json, os
-from pathlib import Path
-root = Path(os.environ["TERRA_ARTIFACT_ROOT"]) / "reconstruction/terra"
-print(json.dumps(json.loads((root / "run.json").read_text())["counts"], indent=2))
-PY
+cat "$TERRA_ARTIFACT_ROOT/reconstruction/terra/run.json"
 ```
 
 The cohort record is a reconstruction report. For

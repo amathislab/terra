@@ -32,4 +32,12 @@ def bundled_dataset_config(name: str) -> Path:
     return path.resolve()
 
 
-__all__ = ["DATASET_CONFIG_NAMES", "bundled_dataset_config"]
+def resolve_dataset_config(value: str | Path) -> Path:
+    """Resolve a bundled dataset name or an explicit TOML path."""
+    candidate = Path(value).expanduser()
+    if candidate.suffix.casefold() == ".toml" or candidate.parent != Path("."):
+        return candidate.resolve()
+    return bundled_dataset_config(str(value))
+
+
+__all__ = ["DATASET_CONFIG_NAMES", "bundled_dataset_config", "resolve_dataset_config"]

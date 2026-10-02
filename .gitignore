@@ -28,5 +28,3 @@ checkpoints/
 /wandb/
 /artifacts/
 /videos/
-/.worktrees/
-/*.bundle

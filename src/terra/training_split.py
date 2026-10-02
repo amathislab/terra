@@ -38,8 +38,6 @@ def canonical_motion_type(row: Mapping[str, str]) -> str:
         return "flat_locomotion"
     if explicit:
         return explicit
-    if row.get("dataset", "").strip().casefold() == "amass-locomotion":
-        return "flat_locomotion"
     return "unspecified"
 
 

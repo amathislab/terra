@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Mapping
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -34,7 +35,7 @@ from terra.artifacts import (
     save_retarget_result,
     validate_retarget_artifacts,
 )
-from terra.baselines import GMR_BASELINE, SMPL_BASELINE, fit_gmr_baseline, fit_smpl_baseline
+from terra.baselines import GMR_DEFAULTS, SMPL_DEFAULTS, fit_gmr_baseline, fit_smpl_baseline
 from terra.baselines.gmr import runtime_paths as gmr_runtime_paths
 from terra.contracts import RetargetResult
 from terra.mat import MatSchemaInput, load_mat_schema, prepare_mat_marker_archive
@@ -122,7 +123,7 @@ def _gmr_config(
     model_path: Path | None = None,
     cache_root: str | Path | None = None,
 ) -> dict[str, object]:
-    resolved = GMR_BASELINE.resolved_config(overrides)
+    resolved = GMR_DEFAULTS | dict(overrides or {})
     resolved.pop("algorithm", None)
     resolved.pop("allow_cache_download", None)
     if model_path is not None:
@@ -142,7 +143,7 @@ def _validate_solver_terrain(
 
 def _validate_method_overrides(method: RetargetingMethod, overrides: Mapping[str, object]) -> None:
     if method == "smpl":
-        unknown = sorted(set(overrides) - set(SMPL_BASELINE.config))
+        unknown = sorted(set(overrides) - set(SMPL_DEFAULTS))
         if unknown:
             raise ValueError(
                 "method='smpl' does not accept configuration overrides outside its "
@@ -361,9 +362,16 @@ def retarget_smplh(
         stability_policy=stability_policy,
         config=config,
         retry=lambda overrides: retarget_smplh(
-            source_path, method=method, terrain=terrain, env_name=env_name,
-            config=overrides, smpl_model_path=smpl_model_path, cache_root=cache_root,
-            fitted_shape_path=fitted_shape_path, logger=logger, stability_policy="off",
+            source_path,
+            method=method,
+            terrain=terrain,
+            env_name=env_name,
+            config=overrides,
+            smpl_model_path=smpl_model_path,
+            cache_root=cache_root,
+            fitted_shape_path=fitted_shape_path,
+            logger=logger,
+            stability_policy="off",
         ),
     )
 
@@ -445,10 +453,8 @@ def _retarget_marker_trajectory(
     if gmr_config is not None:
         gmr_config["cache_root"] = str(resolved_cache_root)
 
-    with gmr_runtime_paths(
-        resolved_cache_root if request.method == "gmr" else None,
-        model_path if request.method == "gmr" else None,
-    ):
+    runtime = gmr_runtime_paths(resolved_cache_root, model_path) if request.method == "gmr" else nullcontext()
+    with runtime:
         trajectory, analysis = retarget_c3d_to_trajectory(
             str(Path(fit_source_path).expanduser().resolve() if fit_source_path is not None else request.source),
             env_name,
@@ -525,11 +531,20 @@ def retarget_c3d(
         stability_policy=stability_policy,
         config=config,
         retry=lambda overrides: retarget_c3d(
-            source_path, method=method, terrain=terrain, env_name=env_name, config=overrides,
-            c3d_options=c3d_options, c3d_model_path=c3d_model_path, smpl_model_path=smpl_model_path,
-            cache_root=cache_root, logger=logger, stability_policy="off"
+            source_path,
+            method=method,
+            terrain=terrain,
+            env_name=env_name,
+            config=overrides,
+            c3d_options=c3d_options,
+            c3d_model_path=c3d_model_path,
+            smpl_model_path=smpl_model_path,
+            cache_root=cache_root,
+            logger=logger,
+            stability_policy="off",
         ),
     )
+
 
 def retarget_trc(
     source_path: str | Path,
@@ -581,11 +596,21 @@ def retarget_trc(
         stability_policy=stability_policy,
         config=config,
         retry=lambda overrides: retarget_trc(
-            source_path, method=method, terrain=terrain, env_name=env_name, config=overrides,
-            c3d_options=c3d_options, c3d_model_path=c3d_model_path, smpl_model_path=smpl_model_path,
-            cache_root=cache_root, trc_up_axis=trc_up_axis, logger=logger, stability_policy="off"
+            source_path,
+            method=method,
+            terrain=terrain,
+            env_name=env_name,
+            config=overrides,
+            c3d_options=c3d_options,
+            c3d_model_path=c3d_model_path,
+            smpl_model_path=smpl_model_path,
+            cache_root=cache_root,
+            trc_up_axis=trc_up_axis,
+            logger=logger,
+            stability_policy="off",
         ),
     )
+
 
 def retarget_mat(
     source_path: str | Path,
@@ -638,12 +663,22 @@ def retarget_mat(
         stability_policy=stability_policy,
         config=config,
         retry=lambda overrides: retarget_mat(
-            source_path, mat_schema=mat_schema, mat_selectors=mat_selectors, method=method,
-            terrain=terrain, env_name=env_name, config=overrides, c3d_options=c3d_options,
-            c3d_model_path=c3d_model_path, smpl_model_path=smpl_model_path, cache_root=cache_root,
-            logger=logger, stability_policy="off"
+            source_path,
+            mat_schema=mat_schema,
+            mat_selectors=mat_selectors,
+            method=method,
+            terrain=terrain,
+            env_name=env_name,
+            config=overrides,
+            c3d_options=c3d_options,
+            c3d_model_path=c3d_model_path,
+            smpl_model_path=smpl_model_path,
+            cache_root=cache_root,
+            logger=logger,
+            stability_policy="off",
         ),
     )
+
 
 def retarget(
     source_path: str | Path,

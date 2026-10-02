@@ -9,15 +9,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from terra._musclemimic import fit_smpl_motion as _fit_smpl_motion
-from terra.baselines._spec import BaselineSpec
 from terra.baselines.temporal import resample_smplh_motion
 
-SMPL_BASELINE = BaselineSpec(
-    key="smpl",
-    label="MuscleMimic SMPL-fit",
-    dependency_extra="baselines",
-    config={"algorithm": "smpl", "target_fps": None, "skip_steps": True, "visualize": False},
-)
+SMPL_DEFAULTS = {"algorithm": "smpl", "target_fps": None, "skip_steps": True, "visualize": False}
 
 
 def fit_motion(
@@ -38,10 +32,10 @@ def fit_motion(
         supplied["skip_steps"] = skip_steps
     if visualize is not None:
         supplied["visualize"] = visualize
-    unknown = sorted(set(supplied) - set(SMPL_BASELINE.config))
+    unknown = sorted(set(supplied) - set(SMPL_DEFAULTS))
     if unknown:
         raise ValueError(f"unknown MM-SMPL configuration field(s): {', '.join(unknown)}")
-    resolved = SMPL_BASELINE.resolved_config(supplied)
+    resolved = SMPL_DEFAULTS | supplied
     resolved.pop("algorithm")
     target_fps = resolved.pop("target_fps")
     skip_steps = resolved.pop("skip_steps")
@@ -70,4 +64,4 @@ def fit_motion(
     return trajectory, analysis
 
 
-__all__ = ["SMPL_BASELINE", "fit_motion"]
+__all__ = ["SMPL_DEFAULTS", "fit_motion"]

@@ -1,5 +1,4 @@
 import csv
-from collections import Counter
 
 from terra.datasets.gait120 import (
     MOVEMENT_METADATA,
@@ -8,11 +7,8 @@ from terra.datasets.gait120 import (
     _filter_clips_by_selection_manifest,
     _summarize_marker_fit_quality,
     _write_manifest,
-    collect_chair_conversion_clips,
     fit_clips,
     inspect_dataset,
-    select_balanced_chair_clips,
-    write_chair_selection,
 )
 
 
@@ -24,12 +20,9 @@ def _clip(tmp_path, motion, *, subject=1, movement="SlopeAscent", mean=10.0):
         trial=1,
         paired_steps="1;2",
         marker_archive=str(tmp_path / ".markers" / f"{rel}_markers.npz"),
-        emg_archive=str(tmp_path / f"{rel}_emg.npz"),
         output_path=str(tmp_path / f"{motion}.npz"),
         motion=motion,
-        emg_path="source.mat",
         trc_paths="step1.trc;step2.trc",
-        mot_paths="step1.mot;step2.mot",
         marker_error_mean_mm=mean,
         status="existing",
     )
@@ -45,7 +38,6 @@ def test_manifest_paths_are_relative_to_output_root(tmp_path):
         row = next(csv.DictReader(handle))
     assert row["dataset"] == "gait120"
     assert row["output_path"] == "Gait120/S001/SlopeAscent/Trial01/AllSteps_stageii.npz"
-    assert row["biomechanics_archive"] == ""
     assert not row["output_path"].startswith("runs/gait120/smplh/")
 
 
@@ -102,22 +94,6 @@ def test_failed_calibration_rejects_dependent_target(tmp_path):
     assert {row["motion"] for row in rejections} == {calibration.motion, dependent.motion}
 
 
-def test_emg_validation_failure_rejects_clip(tmp_path):
-    clip = _clip(tmp_path, "Gait120/S001/SitToStand/Trial01/AllSteps_stageii")
-    quality = _summarize_marker_fit_quality([clip])
-
-    rejections = _apply_fit_quality(
-        [clip],
-        validation_failures=[],
-        emg_validation_failures=[{"motion": clip.motion, "error": "non-finite EMG"}],
-        marker_fit_quality=quality,
-    )
-
-    assert clip.fit_passed is False
-    assert clip.fit_failure_reason == "emg_validation: non-finite EMG"
-    assert [row["motion"] for row in rejections] == [clip.motion]
-
-
 def test_fit_progress_does_not_replace_public_manifest(tmp_path, monkeypatch):
     clip = _clip(tmp_path, "Gait120/S001/SlopeAscent/Trial01/AllSteps_stageii")
     public_manifest = tmp_path / "manifest.csv"
@@ -157,10 +133,9 @@ def test_stool_tasks_are_single_transition_chair_motions():
     assert MOVEMENT_METADATA["StairAscent"].steps == (1, 2)
 
 
-def test_audit_counts_task_specific_step_cardinality(tmp_path):
+def test_inspection_counts_task_specific_step_cardinality(tmp_path):
     steps, clips, report = inspect_dataset(
         original_root=tmp_path / "original",
-        emg_root=tmp_path / "emg",
         output_root=tmp_path / "output",
         subjects=[1],
         movements=("LevelWalking", "SitToStand", "StandToSit"),
@@ -174,94 +149,37 @@ def test_audit_counts_task_specific_step_cardinality(tmp_path):
     assert report["by_movement"]["StandToSit"]["expected_steps"] == 2
 
 
-def test_balanced_chair_selection_is_exact_reproducible_and_calibrated(tmp_path):
-    clips = []
-    for subject in range(1, 26):
-        clips.append(
-            _clip(
-                tmp_path,
-                f"Gait120/S{subject:03d}/LevelWalking/Trial01/AllSteps_stageii",
-                subject=subject,
-                movement="LevelWalking",
+def test_marker_only_gait120_input_can_be_prepared(tmp_path):
+    import numpy as np
+
+    from terra.datasets.gait120 import prepare_marker_archives
+
+    original = tmp_path / "original"
+    trial = original / "S001/MotionCapture/LevelWalking/TRC/Trial01"
+    trial.mkdir(parents=True)
+    for step in (1, 2):
+        path = trial / f"Step{step:02d}.trc"
+        path.write_text(
+            "PathFileType\t4\t(X/Y/Z)\tstep.trc\n"
+            "DataRate\tCameraRate\tNumFrames\tNumMarkers\tUnits\n"
+            "100\t100\t3\t2\tmm\n"
+            "Frame#\tTime\tLANK\t\t\tRANK\t\t\n"
+            "\t\tX1\tY1\tZ1\tX2\tY2\tZ2\n"
+            + "".join(
+                f"{frame + 1}\t{((step - 1) * 3 + frame) / 100:.2f}\t100\t200\t300\t400\t500\t600\n"
+                for frame in range(3)
             )
         )
-        for movement in ("SitToStand", "StandToSit"):
-            for trial in range(1, 6):
-                clip = _clip(
-                    tmp_path,
-                    f"Gait120/S{subject:03d}/{movement}/Trial{trial:02d}/AllSteps_stageii",
-                    subject=subject,
-                    movement=movement,
-                )
-                clip.trial = trial
-                clip.paired_steps = "1"
-                clip.terrain_class = "chair_sit"
-                clip.expected_family = "steps"
-                clips.append(clip)
-
-    targets, selected = select_balanced_chair_clips(clips, per_movement=105)
-    repeated, _ = select_balanced_chair_clips(clips, per_movement=105)
-
-    assert [clip.motion for clip in targets] == [clip.motion for clip in repeated]
-    assert len(targets) == 210
-    assert Counter(clip.movement for clip in targets) == Counter(SitToStand=105, StandToSit=105)
-    assert Counter((clip.movement, clip.trial) for clip in targets) == Counter(
-        {(movement, trial): 21 for movement in ("SitToStand", "StandToSit") for trial in range(1, 6)}
+    _steps, clips, report = inspect_dataset(
+        original_root=original,
+        output_root=tmp_path / "output",
+        subjects=[1],
+        movements=("LevelWalking",),
+        trials=[1],
     )
-    target_subjects = {clip.subject for clip in targets}
-    calibrations = [clip for clip in selected if clip.role == "calibration"]
-    assert {clip.subject for clip in calibrations} == target_subjects
-    assert all(clip.movement == "LevelWalking" and clip.trial == 1 for clip in calibrations)
-
-    manifest = tmp_path / "chair_selection.csv"
-    write_chair_selection(manifest, targets)
-    with manifest.open(newline="") as handle:
-        rows = list(csv.DictReader(handle))
-    assert len(rows) == 210
-    assert {row["dataset"] for row in rows} == {"gait120"}
-    assert {row["terrain_class"] for row in rows} == {"chair_sit"}
-    assert all(
-        row["calibration_motion"]
-        == f"Gait120/{row['subject']}/LevelWalking/Trial01/AllSteps_stageii"
-        for row in rows
-    )
-
-
-def test_chair_conversion_pool_precedes_successful_balanced_selection(tmp_path):
-    clips = []
-    for subject in range(1, 24):
-        calibration = _clip(
-            tmp_path,
-            f"Gait120/S{subject:03d}/LevelWalking/Trial01/AllSteps_stageii",
-            subject=subject,
-            movement="LevelWalking",
-        )
-        calibration.fit_passed = subject != 1
-        clips.append(calibration)
-        for movement in ("SitToStand", "StandToSit"):
-            for trial in range(1, 6):
-                clip = _clip(
-                    tmp_path,
-                    f"Gait120/S{subject:03d}/{movement}/Trial{trial:02d}/AllSteps_stageii",
-                    subject=subject,
-                    movement=movement,
-                )
-                clip.trial = trial
-                clip.fit_passed = subject != 2
-                clips.append(clip)
-
-    conversion_targets, conversion_clips = collect_chair_conversion_clips(clips)
-    targets, selected = select_balanced_chair_clips(
-        conversion_clips,
-        per_movement=105,
-        fit_passed_only=True,
-    )
-
-    assert len(conversion_targets) == 230
-    assert len(conversion_clips) == 253
-    assert len(targets) == 210
-    assert {clip.subject for clip in targets}.isdisjoint({1, 2})
-    assert all(clip.fit_passed for clip in selected)
-    assert Counter((clip.movement, clip.trial) for clip in targets) == Counter(
-        {(movement, trial): 21 for movement in ("SitToStand", "StandToSit") for trial in range(1, 6)}
-    )
+    assert report["summary"]["valid_trc_steps"] == 2
+    assert len(clips) == 1 and clips[0].paired_steps == "1;2"
+    prepare_marker_archives(clips)
+    with np.load(clips[0].marker_archive, allow_pickle=False) as archive:
+        assert archive["positions"].shape == (6, 2, 3)
+        np.testing.assert_allclose(archive["positions"][0, 0], [0.1, -0.3, 0.2])

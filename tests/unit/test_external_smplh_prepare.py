@@ -128,7 +128,6 @@ def test_external_manifest_is_atomic_and_relocatable(tmp_path: Path) -> None:
         source_path=str(tmp_path.parent / "Marker1.mat"),
         marker_path=str(tmp_path / ".markers/Darmstadt/D01/test.npz"),
         output_path=str(tmp_path / "Darmstadt/D01/test.npz"),
-        biomechanics_path=str(tmp_path / "Darmstadt/D01/test_biomechanics.npz"),
         expected_family="steps",
     )
     manifest = tmp_path / "manifest.csv"
@@ -139,7 +138,6 @@ def test_external_manifest_is_atomic_and_relocatable(tmp_path: Path) -> None:
         row = next(csv.DictReader(handle))
     assert row["marker_path"] == ".markers/Darmstadt/D01/test.npz"
     assert row["output_path"] == "Darmstadt/D01/test.npz"
-    assert row["biomechanics_path"] == "Darmstadt/D01/test_biomechanics.npz"
     assert not (tmp_path / ".manifest.csv.tmp").exists()
 
 
@@ -256,3 +254,32 @@ def test_vielemeyer_calibration_failure_stops_subject(tmp_path: Path, monkeypatc
     assert results[0].status == "generated"
     assert results[1].status == "failed"
     assert "no same-subject level motion passed" in results[1].error
+
+
+def test_darmstadt_mat_inventory_exports_markers_without_physiology(tmp_path):
+    from scipy.io import savemat
+
+    from terra.datasets import darmstadt
+
+    source_root = tmp_path / "source"
+    source_root.mkdir()
+    touchdowns = source_root / "touchdowns/Processed/Touchdowns"
+    touchdowns.mkdir(parents=True)
+    markers = np.empty(6, dtype=object)
+    annotations = np.empty(6, dtype=object)
+    base = np.arange(90, dtype=float).reshape(30, 3) / 100
+    fields = {field: base + index * 0.001 for index, (_label, field) in enumerate(DARMSTADT_MARKERS)}
+    for index in range(6):
+        markers[index] = np.asarray([fields, fields], dtype=object)
+        annotations[index] = np.asarray([{"tdL": np.array([11, 16]), "tdR": np.array([14, 19])}] * 2, dtype=object)
+    savemat(source_root / "Marker1.mat", {"Marker": markers, "Marker_fs": 100.0})
+    savemat(touchdowns / "Touchdowns1.mat", {"TD_ascent": annotations, "TD_descent": annotations, "TD_fs": 100.0})
+    rows = darmstadt._inventory(source_root, tmp_path / "output")
+    assert len(rows) == 24
+    row = rows[0]
+    counts = darmstadt._export_subject([row], SimpleNamespace(redo=True, padding_s=0.02))
+    assert counts[row["motion"]] == len(DARMSTADT_MARKERS)
+    with np.load(row["marker_path"], allow_pickle=False) as archive:
+        assert archive["positions"].shape == (13, len(DARMSTADT_MARKERS), 3)
+        np.testing.assert_allclose(archive["positions"][:, 0], base[8:21])
+        assert float(archive["fps"]) == 100.0

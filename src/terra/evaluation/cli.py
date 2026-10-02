@@ -6,6 +6,7 @@ import argparse
 import csv
 import json
 import math
+import multiprocessing
 import os
 import sys
 import time
@@ -198,6 +199,18 @@ def _worker(job: tuple) -> tuple[dict, dict]:
     return result.row, result.quality
 
 
+def _evaluate_jobs(jobs: list[tuple], workers: int):
+    if workers == 1:
+        yield from map(_worker, jobs)
+        return
+    with ProcessPoolExecutor(
+        max_workers=min(workers, len(jobs)), mp_context=multiprocessing.get_context("spawn")
+    ) as pool:
+        futures = [pool.submit(_worker, job) for job in jobs]
+        for future in as_completed(futures):
+            yield future.result()
+
+
 def _definitions_markdown() -> str:
     lines = [
         "# Metric definitions",
@@ -284,17 +297,14 @@ def run(args: argparse.Namespace) -> int:
     started = time.time()
     rows: list[dict] = []
     quality_rows: list[dict] = []
-    with ProcessPoolExecutor(max_workers=min(args.workers, len(jobs))) as pool:
-        futures = {pool.submit(_worker, job): job[:4] for job in jobs}
-        for index, future in enumerate(as_completed(futures), 1):
-            row, quality = future.result()
-            rows.append(row)
-            quality_rows.append(quality)
-            status = "ok" if not row["error"] else f"ERROR {row['error']}"
-            print(
-                f"[{index}/{len(jobs)} {(time.time() - started) / 60:5.1f}m] {row['method']} {row['motion']} {status}",
-                flush=True,
-            )
+    for index, (row, quality) in enumerate(_evaluate_jobs(jobs, args.workers), 1):
+        rows.append(row)
+        quality_rows.append(quality)
+        status = "ok" if not row["error"] else f"ERROR {row['error']}"
+        print(
+            f"[{index}/{len(jobs)} {(time.time() - started) / 60:5.1f}m] {row['method']} {row['motion']} {status}",
+            flush=True,
+        )
     method_order = {label: index for index, (label, _subdir) in enumerate(methods)}
     class_order = {label: index for index, (label, _manifest) in enumerate(classes)}
     rows.sort(key=lambda row: (method_order[row["method"]], class_order[row["motion_class"]], row["motion"]))

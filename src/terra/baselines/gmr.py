@@ -12,29 +12,22 @@ from pathlib import Path
 import numpy as np
 
 from terra._musclemimic import fit_gmr_motion as _fit_gmr_motion
-from terra.baselines._spec import BaselineSpec
 from terra.baselines.temporal import resample_smplh_motion
 from terra.smplh import load_smplh_motion
 
-_GMR_RUNTIME_LOCK = threading.RLock()
+_GMR_RUNTIME_LOCK = threading.Lock()
 
-GMR_BASELINE = BaselineSpec(
-    key="gmr",
-    label="GMR",
-    dependency_extra="baselines",
-    config={
-        "algorithm": "gmr",
-        "offset_to_ground": True,
-        "target_fps": 30,
-        "exact_target_fps": False,
-        "solver": "daqp",
-        "damping": 0.5,
-        # Use GMR's released velocity limit.
-        "use_velocity_limit": True,
-        "use_fitted_shape": True,
-        "allow_cache_download": False,
-    },
-)
+GMR_DEFAULTS = {
+    "algorithm": "gmr",
+    "offset_to_ground": True,
+    "target_fps": 30,
+    "exact_target_fps": False,
+    "solver": "daqp",
+    "damping": 0.5,
+    "use_velocity_limit": True,
+    "use_fitted_shape": True,
+    "allow_cache_download": False,
+}
 
 
 @contextmanager
@@ -47,10 +40,6 @@ def runtime_paths(
     LocoMuJoCo's GMR shape fitter reads these paths from the environment. Serialize
     calls that set them and restore the caller's values afterward.
     """
-
-    if cache_root is None and model_root is None:
-        yield
-        return
 
     requested = {
         "CONVERTED_AMASS_PATH": cache_root,
@@ -94,7 +83,7 @@ def prepare_fitted_shape(
 
 def fit_motion(env_name, robot_conf, motion_data, logger, config: Mapping[str, object] | None = None):
     """Run GMR with TERRA's baseline defaults plus explicit overrides."""
-    resolved = GMR_BASELINE.resolved_config(config)
+    resolved = GMR_DEFAULTS | dict(config or {})
     resolved.pop("algorithm", None)
     resolved.pop("allow_cache_download", None)
     cache_root = resolved.pop("cache_root", None)
@@ -135,4 +124,4 @@ def fit_motion(env_name, robot_conf, motion_data, logger, config: Mapping[str, o
         return trajectory, dict(analysis) | report
 
 
-__all__ = ["GMR_BASELINE", "fit_motion", "prepare_fitted_shape", "runtime_paths"]
+__all__ = ["GMR_DEFAULTS", "fit_motion", "prepare_fitted_shape", "runtime_paths"]

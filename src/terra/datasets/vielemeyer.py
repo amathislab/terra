@@ -13,14 +13,6 @@ from pathlib import Path
 import numpy as np
 
 from terra._revision import write_git_commit
-from terra.datasets.biomechanics import (
-    biomechanics_path,
-    empty_emg,
-    motion_clock,
-    resample_linear,
-    validate_biomechanics,
-    write_biomechanics,
-)
 from terra.datasets.marker_fitting import (
     Clip,
     _fit_clip,
@@ -67,9 +59,6 @@ def _inventory(input_root: Path, output_root: Path) -> list[dict]:
                 "source_path": str(path.resolve()),
                 "marker_path": str(path.resolve()),
                 "output_path": str((output_root / f"{motion}.npz").resolve()),
-                "biomechanics_path": str(
-                    biomechanics_path(output_root / f"{motion}.npz").resolve()
-                ),
                 "expected_family": family,
                 "terrain_class": terrain_class,
                 "expected_slope_deg": slope,
@@ -91,183 +80,10 @@ def _clip(row: dict, *, role: str, calibration_motion: str) -> Clip:
         source_path=row["source_path"],
         marker_path=row["marker_path"],
         output_path=row["output_path"],
-        biomechanics_path=row["biomechanics_path"],
         expected_family=row["expected_family"],
         terrain_class=row["terrain_class"],
         expected_slope_deg=float(row["expected_slope_deg"]),
         calibration_motion=calibration_motion,
-    )
-
-
-def _preflight_biomechanics(clips: list[Clip]) -> None:
-    """Fail before fitting if a C3D does not contain its advertised force plates."""
-
-    import ezc3d
-
-    failures = []
-    for clip in clips:
-        try:
-            c3d = ezc3d.c3d(clip.source_path)
-            used = int(np.asarray(c3d["parameters"]["FORCE_PLATFORM"]["USED"]["value"]).reshape(-1)[0])
-            if used < 1:
-                raise ValueError("FORCE_PLATFORM:USED is zero")
-        except Exception as exc:
-            failures.append(f"{clip.motion}: {type(exc).__name__}: {exc}")
-    if failures:
-        preview = "\n".join(f"  - {failure}" for failure in failures[:20])
-        suffix = f"\n  ... and {len(failures) - 20} more" if len(failures) > 20 else ""
-        raise FileNotFoundError(
-            f"Vielemeyer biomechanical preflight failed for {len(failures)} C3D files:\n"
-            f"{preview}{suffix}"
-        )
-
-
-def _foot_centres(c3d: dict, analog_frames: int) -> dict[str, np.ndarray]:
-    labels = list(c3d["parameters"]["POINT"]["LABELS"]["value"])
-    points = np.asarray(c3d["data"]["points"][:3], dtype=np.float64)
-    point_frames = points.shape[-1]
-    centres = {}
-    for side, prefix in (("left", "L"), ("right", "R")):
-        marker_indices = [labels.index(f"{prefix}HEE"), labels.index(f"{prefix}TOE")]
-        centre = np.nanmean(np.stack([points[:, index, :].T for index in marker_indices]), axis=0)
-        source_clock = np.linspace(0.0, 1.0, point_frames)
-        analog_clock = np.linspace(0.0, 1.0, analog_frames)
-        centres[side] = np.stack(
-            [np.interp(analog_clock, source_clock, centre[:, axis]) for axis in range(3)],
-            axis=-1,
-        )
-    return centres
-
-
-def _extract_vielemeyer_grf(source_path: str | Path) -> tuple[dict, list[str]]:
-    """Extract force plates, assign each contact to its nearest foot, and use SI units."""
-
-    import ezc3d
-
-    c3d = ezc3d.c3d(str(source_path), extract_forceplat_data=True)
-    platforms = c3d["data"]["platform"]
-    if not platforms:
-        raise ValueError("C3D contains no extractable force-platform samples")
-    lengths = {np.asarray(platform["force"]).shape[-1] for platform in platforms}
-    if len(lengths) != 1:
-        raise ValueError(f"Force-platform sample counts disagree: {sorted(lengths)}")
-    samples = lengths.pop()
-    analog_fps = float(c3d["header"]["analogs"]["frame_rate"])
-    native_time = np.arange(samples, dtype=np.float64) / analog_fps
-    feet = _foot_centres(c3d, samples)
-    force = np.zeros((samples, 2, 3), dtype=np.float64)
-    moment = np.zeros_like(force)
-    cop_weighted = np.zeros_like(force)
-    cop_weight = np.zeros((samples, 2), dtype=np.float64)
-    assignments = []
-    platform_forces = []
-    platform_moments = []
-    platform_cops = []
-    platform_valid = []
-    for index, platform in enumerate(platforms, start=1):
-        platform_force = np.asarray(platform["force"], dtype=np.float64).T
-        platform_moment = np.asarray(platform["moment"], dtype=np.float64).T
-        platform_cop = np.asarray(platform["center_of_pressure"], dtype=np.float64).T
-        if platform.get("unit_force") != "N" or platform.get("unit_moment") != "Nmm" or platform.get("unit_position") != "mm":
-            raise ValueError(
-                f"Unsupported platform units {platform.get('unit_force')}/"
-                f"{platform.get('unit_moment')}/{platform.get('unit_position')}"
-            )
-        safe_cop = np.nan_to_num(platform_cop, nan=0.0, posinf=0.0, neginf=0.0)
-        active = np.linalg.norm(platform_force, axis=-1) > 20.0
-        platform_forces.append(platform_force.astype(np.float32))
-        platform_moments.append((platform_moment / 1000.0).astype(np.float32))
-        platform_cops.append((safe_cop / 1000.0).astype(np.float32))
-        platform_valid.append(active)
-        if not active.any():
-            assignments.append(f"platform{index}:inactive")
-            continue
-        distances = {
-            side: float(np.nanmedian(np.linalg.norm(platform_cop[active] - centre[active], axis=-1)))
-            for side, centre in feet.items()
-        }
-        side = min(distances, key=distances.get)
-        side_index = ("left", "right").index(side)
-        assignments.append(f"platform{index}:{side}")
-        force[:, side_index] += platform_force
-        moment[:, side_index] += platform_moment / 1000.0
-        weight = np.where(active, np.abs(platform_force[:, 2]), 0.0)
-        cop_weighted[:, side_index] += safe_cop / 1000.0 * weight[:, None]
-        cop_weight[:, side_index] += weight
-    cop = np.zeros_like(force)
-    np.divide(cop_weighted, cop_weight[..., None], out=cop, where=cop_weight[..., None] > 0)
-    valid = cop_weight > 0
-    return (
-        {
-            "native_time_s": native_time,
-            "force": force.astype(np.float32),
-            "moment": moment.astype(np.float32),
-            "cop": cop.astype(np.float32),
-            "valid": valid,
-            "channels": np.asarray(("left", "right")),
-            "fps": analog_fps,
-            "marker_fps": float(c3d["header"]["points"]["frame_rate"]),
-            "marker_first_frame": int(c3d["header"]["points"]["first_frame"]),
-            "platform_force": np.stack(platform_forces, axis=1),
-            "platform_moment": np.stack(platform_moments, axis=1),
-            "platform_cop": np.stack(platform_cops, axis=1),
-            "platform_valid": np.stack(platform_valid, axis=1),
-        },
-        assignments,
-    )
-
-
-def _prepare_biomechanics(clip: Clip, *, redo: bool = False) -> None:
-    output = Path(clip.biomechanics_path or biomechanics_path(clip.output_path))
-    clip.biomechanics_path = str(output)
-    if output.exists() and not redo:
-        try:
-            validate_biomechanics(output, motion_path=clip.output_path)
-            return
-        except Exception:
-            pass
-    clock, fps = motion_clock(clip.output_path)
-    native, assignments = _extract_vielemeyer_grf(clip.source_path)
-    aligned_force = resample_linear(native["native_time_s"], native["force"], clock)
-    aligned_moment = resample_linear(native["native_time_s"], native["moment"], clock)
-    aligned_cop = resample_linear(native["native_time_s"], native["cop"], clock)
-    aligned_valid = np.linalg.norm(aligned_force, axis=-1) > 20.0
-    grf = {
-        "grf_available": np.array(True),
-        "grf_cop_available": np.array(True),
-        "grf_force": aligned_force,
-        "grf_moment": aligned_moment,
-        "grf_cop": aligned_cop,
-        "grf_valid": aligned_valid,
-        "grf_force_native": native["force"],
-        "grf_moment_native": native["moment"],
-        "grf_cop_native": native["cop"],
-        "grf_valid_native": native["valid"],
-        "grf_native_time_s": native["native_time_s"],
-        "grf_channels": native["channels"],
-        "grf_source_paths": np.asarray([str(Path(clip.source_path).resolve())]),
-    }
-    write_biomechanics(
-        output,
-        dataset="vielemeyer",
-        motion=clip.motion,
-        motion_time_s=clock,
-        motion_fps=fps,
-        synchronization="C3D point and analog clocks share their recorded trial origin",
-        emg=empty_emg(len(clock)),
-        grf=grf,
-        metadata={
-            "grf_platform_assignment": np.asarray(assignments),
-            "grf_platform_force_native": native["platform_force"],
-            "grf_platform_moment_native": native["platform_moment"],
-            "grf_platform_cop_native": native["platform_cop"],
-            "grf_platform_valid_native": native["platform_valid"],
-            "grf_contact_threshold_n": np.array(20.0, dtype=np.float32),
-            "motion_source_frame": (
-                native["marker_first_frame"]
-                + np.rint(clock * native["marker_fps"]).astype(np.int64)
-            ),
-        },
     )
 
 
@@ -449,8 +265,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     write_git_commit(args.output_root)
     inventory = _inventory(args.vielemeyer_root, args.output_root)
     clips = _clips(inventory)
-    print(f"Checking force-platform data in {len(clips)} C3D files...", flush=True)
-    _preflight_biomechanics(clips)
 
     results = []
     manifest = args.output_root / "manifest.csv"
@@ -459,13 +273,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         clips_by_subject[clip.subject].append(clip)
     for subject in sorted(clips_by_subject):
         for result in _fit_subject_clips(clips_by_subject[subject], args):
-            if Path(result.output_path).is_file():
-                try:
-                    _prepare_biomechanics(result, redo=args.redo)
-                except Exception as exc:
-                    result.fit_passed = False
-                    result.status = "failed"
-                    result.error = f"BiomechanicsError: {type(exc).__name__}: {exc}"
             results.append(result)
             print(f"[{len(results)}/{len(clips)}] {result.motion}", flush=True)
             _write_manifest(manifest, results)

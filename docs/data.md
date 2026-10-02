@@ -18,10 +18,20 @@ mkdir -p "$TERRA_DATA_ROOT/AMASS" "$TERRA_ARTIFACT_ROOT"
 1. Register or sign in at [AMASS Downloads](https://amass.is.tue.mpg.de/download.php),
    accept its terms, and download a collection in SMPL-H format. Extract it under
    `$TERRA_DATA_ROOT/AMASS`, retaining the collection/subject/motion directories.
-2. Register or sign in at the
-   [MANO/SMPL-H model download](https://mano.is.tue.mpg.de/download.php), accept its
-   terms, and extract the neutral model file as
-   `$TERRA_MODEL_ROOT/SMPLH_NEUTRAL.pkl`.
+2. Register or sign in at the [MANO/SMPL-H downloads](https://mano.is.tue.mpg.de/download.php)
+   and accept the provider terms. Download **both** the SMPL-H models (the archive
+   containing `smplh/neutral/model.npz`) and MANO v1.2 (containing
+   `mano_v1_2/models/MANO_LEFT.pkl` and `MANO_RIGHT.pkl`). Extract both under
+   `$TERRA_MODEL_ROOT`, retaining those directories, then run:
+
+   ```bash
+   python scripts/models/make_smplh_neutral.py "$TERRA_MODEL_ROOT"
+   ```
+
+   This combines the neutral body arrays and hand PCA data into
+   `$TERRA_MODEL_ROOT/SMPLH_NEUTRAL.pkl`. It needs NumPy from the base environment;
+   chumpy is not needed. The male/female `.pkl` files in the MANO archive are not
+   the neutral model. Keep the generated model local under its provider's terms.
 3. Find an extracted motion file and check both paths using the commands below. The
    model resolver also accepts a `smplh/` child directory, but the quickstart assumes
    the direct layout.
@@ -77,7 +87,7 @@ converter.
 | Source | Obtain from | Expected directory |
 |---|---|---|
 | AMASS SMPL-H motions | [AMASS](https://amass.is.tue.mpg.de/) | `AMASS/` |
-| Gait120 markers and physiology | [Motion capture](https://doi.org/10.6084/m9.figshare.27677016.v1), [processed EMG](https://huggingface.co/datasets/amathislab/Gait120-EMG) | `Gait120-original/extracted/`, `Gait120-EMG/` |
+| Gait120 markers | [Motion capture](https://doi.org/10.6084/m9.figshare.27677016.v1) | `Gait120-original/extracted/` |
 | Darmstadt stairs | [TU Darmstadt](https://doi.org/10.48328/tudatalib-1182) | `Darmstadt-Stair-Ambulation/` |
 | Vielemeyer ramps | [Figshare](https://doi.org/10.6084/m9.figshare.29300888.v1) | `Vielemeyer-Ramp-Walking/` |
 | PRISM | [PRISM dataset repository](https://github.com/RyosukeHori/PRISM) | `PRISM/` |
@@ -86,17 +96,14 @@ Before starting a full conversion, spot-check the paths the loaders actually rea
 
 ```text
 Gait120-original/extracted/S001/MotionCapture/LevelWalking/TRC/Trial01/Step01.trc
-Gait120-EMG/Gait120_001_to_010/S001/EMG/ConvertedData.mat
 Darmstadt-Stair-Ambulation/Marker1.mat
 Darmstadt-Stair-Ambulation/touchdowns/Processed/Touchdowns/Touchdowns1.mat
-Darmstadt-Stair-Ambulation/Preprocessed/EMG/EMG1.mat
-Darmstadt-Stair-Ambulation/Preprocessed/Forces/Forces1.mat
 Vielemeyer-Ramp-Walking/raw/Ref_*/<condition>/*.c3d
 ```
 
-The Gait120 converter also reads matching `MOT` step files. For Darmstadt, download
-trial-level `Preprocessed.zip` and `Processed.zip` from the provider; the
-`FullyProcessed` group averages cannot replace the EMG, force, or touchdown trials.
+Darmstadt conversion needs the marker files and trial touchdown records in
+`Processed.zip`. EMG, force files, and group averages are not required for motion
+conversion. Gait120 conversion needs only the TRC marker recordings.
 The Vielemeyer loader also accepts `raw-incomplete/Ref_*/<condition>/*.c3d`.
 These are path patterns for checking extraction, not a requirement to create a sample
 file when that subject or trial is absent.
@@ -107,9 +114,8 @@ provider archive so a take is at
 accepts that extraction root or the inner `data/PRISM` directory. Check with
 `find "$TERRA_DATA_ROOT/PRISM" -path "*/subj*/take*.pkl" | head` before converting.
 
-For Darmstadt physiological analysis, retain trial-level EMG and force data alongside
-markers and touchdown records. Raw marker datasets need conversion to TERRA's SMPL-H
-motion archives; see [Motion files](motion-files.md#convert-a-dataset).
+Raw marker datasets need conversion to TERRA's SMPL-H motion archives; see
+[Motion files](motion-files.md#convert-a-dataset).
 
 The marker converters default to an L2 pose prior, 100 Stage-I iterations, 12 calibration
 frames, and 80 Stage-II iterations with residual-gate retries at 50 Hz. You can configure

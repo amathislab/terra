@@ -50,8 +50,7 @@ RAMP_AMBIGUOUS_PROFILE_RMS = 0.5 * DEFAULT_LEVEL_TOL
 # evidence for continuity.
 RAMP_MIN_INTERIOR_FOOTFALLS = 2
 
-# The paper ablation removes both physical ramp--step cues while retaining the same
-# support events, calibrated heights, candidate primitives, and contact residual gate.
+# Height-only mode uses the same support evidence without orientation or swing cues.
 FAMILY_EVIDENCE_PHYSICAL = "physical"
 FAMILY_EVIDENCE_HEIGHT_ONLY = "height_only"
 FAMILY_EVIDENCE_MODES = (FAMILY_EVIDENCE_PHYSICAL, FAMILY_EVIDENCE_HEIGHT_ONLY)
@@ -353,13 +352,8 @@ def classify_terrain_family(
             and swing_family != family
             and abs(float(swing["swing_clearance_margin"])) >= SWING_CLEARANCE_RESOLUTION
         ):
-            # The resolution statement is symmetric.  Previously it was only honoured
-            # when a barely-ramp orientation disagreed with stair clearance.  A barely-
-            # flat orientation still overruled ramp-like clearance, even though neither
-            # sign of a sub-resolution angular difference is measurable.  This produced
-            # four discontinuous boxes for two Vielemeyer ramps whose calibrated support
-            # profiles fit one continuous plane to 7--10 mm RMS.  Let the independent
-            # swing cue decide either sign of the same near-tie.
+            # Sub-resolution angular differences have no reliable sign; use the
+            # independently resolved swing cue to break the tie.
             family = str(swing_family)
             reason = "surface normal is within positional resolution; swing clearance decides"
     else:

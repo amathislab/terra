@@ -1,4 +1,4 @@
-"""Tests for the bundled reconstruction registry and cohort contract."""
+"""Terrain cohort publication, selection, and failure reporting."""
 
 from __future__ import annotations
 

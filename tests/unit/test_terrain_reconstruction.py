@@ -261,7 +261,7 @@ def test_uncalibrated_family_fallback_keeps_offset_residual_definition():
 
 
 def test_height_only_family_ablation_does_not_evaluate_physical_cues(monkeypatch):
-    """The paper ablation must not let orientation or swing evidence leak into selection."""
+    """Height-only selection ignores orientation and swing measurements."""
     import terra.terrain.family as family
 
     def forbidden(*_args, **_kwargs):
@@ -798,7 +798,7 @@ def test_free_space_bounds_the_extent():
 
 
 def test_free_space_evidence_can_be_ablated_without_changing_support_events():
-    """The paper ablation removes negative extent evidence, not positive contacts."""
+    """Contact-only extent fitting retains positive support evidence."""
     motion = synth_walk(beam_x=(-0.9, 0.9))
     bounded, bounded_report = fit_terrain_from_motion(
         motion,

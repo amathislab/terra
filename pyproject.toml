@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,7 +9,7 @@ description = "TERRA: terrain-aware motion retargeting for MuscleMimic"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "NOTICE"]
 keywords = [
     "biomechanics",
     "motion-capture",
@@ -109,7 +109,7 @@ terra = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-markers = ["slow: distribution build and installation checks (enable with --runslow)"]
+markers = ["slow: distribution and real solver integration checks (enable with --runslow)"]
 
 [tool.ruff]
 line-length = 120

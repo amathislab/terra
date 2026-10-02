@@ -13,7 +13,7 @@ from typing import Any
 
 from terra._revision import write_git_commit
 from terra.dataset_pipeline import DatasetConfig, load_dataset_config
-from terra.datasets.config import bundled_dataset_config
+from terra.datasets.config import resolve_dataset_config
 
 # Keep the existing wire value so completed retargeting-only evaluations remain usable.
 RETARGET_EVALUATION_SCHEMA = "terra.dataset-evaluation"
@@ -23,13 +23,6 @@ DEFAULT_METHOD_LABELS = {
     "gmr": "GMR",
     "smpl": "MuscleMimic SMPL-fit",
 }
-
-
-def _config_path(value: str) -> Path:
-    candidate = Path(value).expanduser()
-    if candidate.suffix.casefold() == ".toml" or candidate.parent != Path("."):
-        return candidate.resolve()
-    return bundled_dataset_config(value)
 
 
 def _assignment(value: str, flag: str) -> tuple[str, str]:
@@ -86,7 +79,7 @@ def _metric_arguments(
 
 
 def evaluate_dataset(args: argparse.Namespace) -> int:
-    config = load_dataset_config(_config_path(args.config))
+    config = load_dataset_config(resolve_dataset_config(args.config))
     if args.cache_root is not None:
         cache_root = config.storage_roots.resolve_artifact(args.cache_root, base=Path.cwd())
         assert cache_root is not None

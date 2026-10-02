@@ -23,6 +23,29 @@ requires_omni = pytest.mark.skipif(
 PROBE_BODIES = ["torso", "humerus_l", "femur_r", "head"]
 
 
+@pytest.fixture
+def retargeter_factory(tmp_path):
+    """Construct the actual inherited retargeter using a small MuJoCo model."""
+    from types import ModuleType
+
+    model_path = tmp_path / "robot.xml"
+    model_path.write_text(
+        "<mujoco><worldbody><body name='root'><freejoint/><geom type='sphere' size='.05'/><body name='tip'><joint name='hinge'/><geom type='sphere' size='.02'/></body></body></worldbody></mujoco>"
+    )
+    constants = ModuleType("test_robot")
+    constants.ROBOT_URDF_FILE = str(model_path)
+    constants.OBJECT_NAME = "ground"
+    constants.ROBOT_DOF = 1
+    constants.FOOT_STICKING_LINKS = []
+    constants.DEMO_JOINTS = []
+    constants.JOINTS_MAPPING = {}
+    constants.MANUAL_LB = {}
+    constants.MANUAL_UB = {}
+    constants.MANUAL_COST = {}
+    constants.NOMINAL_TRACKING_INDICES = []
+    return lambda: TerraRetargeter(constants, None)
+
+
 def test_myofullbody_site_calibration_schema_matches_cache_site_order():
     from musclemimic.environments.humanoids.myofullbody import MyoFullBody
     from terra.constants import MYOFULLBODY_SITE_CALIBRATION
@@ -184,14 +207,6 @@ def test_condensed_laplacian_qp_matches_auxiliary_formulation():
     assert native_sparse_cost == native_cost
 
 
-
-
-
-
-
-
-
-
 def test_dense_least_squares_assembly_matches_sparse_oracle():
     """The fast dense normal equations must match the retained sparse implementation."""
     from scipy import sparse
@@ -215,12 +230,11 @@ def test_dense_least_squares_assembly_matches_sparse_oracle():
 
 
 @requires_omni
-def test_interaction_laplacian_cache_is_qualified_by_topology(monkeypatch):
+def test_interaction_laplacian_cache_is_qualified_by_topology(retargeter_factory, monkeypatch):
     """Vertex motion reuses uniform operators; an adjacency change invalidates them."""
     from holosoma_retargeting.src import interaction_mesh_retargeter as _imr
 
-    retargeter = object.__new__(TerraRetargeter)
-    retargeter._initialize_terra_state()
+    retargeter = retargeter_factory()
     original = _imr.calculate_laplacian_matrix
     calls = 0
 
@@ -246,7 +260,7 @@ def test_interaction_laplacian_cache_is_qualified_by_topology(monkeypatch):
     assert third[1] is not first[1]
 
 
-def test_interaction_laplacian_cache_uses_identity_only_in_validated_frame_scope(monkeypatch):
+def test_interaction_laplacian_cache_uses_identity_only_in_validated_frame_scope(retargeter_factory, monkeypatch):
     """SQP fast hits skip content conversion; direct calls still detect in-place edits."""
     from holosoma_retargeting.src import interaction_mesh_retargeter as _imr
 
@@ -257,8 +271,7 @@ def test_interaction_laplacian_cache_uses_identity_only_in_validated_frame_scope
             self.iterations += 1
             return super().__iter__()
 
-    retargeter = object.__new__(TerraRetargeter)
-    retargeter._initialize_terra_state()
+    retargeter = retargeter_factory()
     original = _imr.calculate_laplacian_matrix
     calls = 0
 
@@ -474,9 +487,7 @@ def test_native_retargeting_step_moves_a_real_mujoco_body_toward_target():
 
 @requires_omni
 @pytest.mark.parametrize("method_profile", ["omniretarget", "terra"])
-def test_omniretarget_static_scene_binding_selects_terrain_box_collisions(
-    monkeypatch, method_profile
-):
+def test_omniretarget_static_scene_binding_selects_terrain_box_collisions(monkeypatch, method_profile):
     """The inherited object constraint must see fitted ramps in matched-core mode."""
     from terra.pipeline import _bind_omniretarget_scene_collision
 
@@ -1032,14 +1043,11 @@ def test_clearance_cost_is_one_sided_and_points_upward(probed_model):
     )
 
 
-def test_self_collision_shortfall_is_capped_per_iteration(monkeypatch):
+def test_self_collision_shortfall_is_capped_per_iteration(retargeter_factory, monkeypatch):
     """A newly deep inter-leg pair must not rearrange the entire leg in one QP step."""
     import mujoco
 
-    from terra.retargeter import TerraRetargeter
-
-    retargeter = object.__new__(TerraRetargeter)
-    retargeter._initialize_terra_state()
+    retargeter = retargeter_factory()
     retargeter.robot_model = mujoco.MjModel.from_xml_string(
         "<mujoco><worldbody><body name='left'><geom name='left_geom' type='sphere' "
         "size='.02'/></body><body name='right'><geom name='right_geom' type='sphere' "
@@ -1067,7 +1075,7 @@ def test_self_collision_shortfall_is_capped_per_iteration(monkeypatch):
             retargeter.attach_self_collision([("left", "right")], max_recovery_per_iter=invalid)
 
 
-def test_collision_prefilter_caches_names_and_invalidates_on_model_swap(monkeypatch):
+def test_collision_prefilter_caches_names_and_invalidates_on_model_swap(retargeter_factory, monkeypatch):
     """Static geom names should be resolved once per compiled MuJoCo model."""
     model_xml = (
         "<mujoco><worldbody>"
@@ -1075,8 +1083,7 @@ def test_collision_prefilter_caches_names_and_invalidates_on_model_swap(monkeypa
         "<body><geom name='probe' type='sphere' size='.02'/></body>"
         "</worldbody></mujoco>"
     )
-    retargeter = object.__new__(TerraRetargeter)
-    retargeter._initialize_terra_state()
+    retargeter = retargeter_factory()
     retargeter.robot_model = mujoco.MjModel.from_xml_string(model_xml)
     retargeter.robot_data = mujoco.MjData(retargeter.robot_model)
 
@@ -1459,14 +1466,11 @@ def test_swing_target_lift_is_inert_on_flat_ground():
     assert not offsets["r"].any()
 
 
-def test_explicit_foot_route_targets_only_contribute_on_finite_frames():
+def test_explicit_foot_route_targets_only_contribute_on_finite_frames(retargeter_factory):
     """The strong route term is absent outside the narrow window selected by OmniRetarget."""
     import mujoco
 
-    from terra.retargeter import TerraRetargeter
-
-    retargeter = object.__new__(TerraRetargeter)
-    retargeter._initialize_terra_state()
+    retargeter = retargeter_factory()
     retargeter.robot_model = mujoco.MjModel.from_xml_string(
         "<mujoco><worldbody><body name='foot'><freejoint/><geom type='sphere' size='.02'/></body></worldbody></mujoco>"
     )
@@ -1488,13 +1492,10 @@ def test_explicit_foot_route_targets_only_contribute_on_finite_frames():
     assert residual == pytest.approx(0.10)
 
 
-def test_annotated_stance_height_contributes_only_with_contact_authority():
+def test_annotated_stance_height_contributes_only_with_contact_authority(retargeter_factory):
     import mujoco
 
-    from terra.retargeter import TerraRetargeter
-
-    retargeter = object.__new__(TerraRetargeter)
-    retargeter._initialize_terra_state()
+    retargeter = retargeter_factory()
     retargeter.robot_model = mujoco.MjModel.from_xml_string(
         "<mujoco><worldbody><body name='foot'><freejoint/><geom type='sphere' size='.02'/></body></worldbody></mujoco>"
     )
@@ -1519,12 +1520,10 @@ def test_annotated_stance_height_contributes_only_with_contact_authority():
     assert residual == pytest.approx(0.004)
 
 
-def test_seat_contact_uses_exact_signed_geom_distance_and_rest_authority():
+def test_seat_contact_uses_exact_signed_geom_distance_and_rest_authority(retargeter_factory):
     """Chair calibration must lower the glute toward the chair, only while active."""
-    from terra.retargeter import TerraRetargeter
 
-    retargeter = object.__new__(TerraRetargeter)
-    retargeter._initialize_terra_state()
+    retargeter = retargeter_factory()
     retargeter.robot_model = mujoco.MjModel.from_xml_string(
         """
         <mujoco>
@@ -1618,14 +1617,11 @@ def test_seat_contact_assembly_is_chair_only_and_baseline_safe():
     assert baseline_ctx.config.seat_contact_mode == "off"
 
 
-def test_new_route_row_ramps_target_and_effective_qp_weight():
+def test_new_route_row_ramps_target_and_effective_qp_weight(retargeter_factory):
     """A route row must not apply full authority to the foot's old residual at its edge."""
     import mujoco
 
-    from terra.retargeter import TerraRetargeter
-
-    retargeter = object.__new__(TerraRetargeter)
-    retargeter._initialize_terra_state()
+    retargeter = retargeter_factory()
     retargeter.robot_model = mujoco.MjModel.from_xml_string(
         "<mujoco><worldbody><body name='foot'><freejoint/><geom type='sphere' size='.02'/></body></worldbody></mujoco>"
     )
@@ -1649,14 +1645,11 @@ def test_new_route_row_ramps_target_and_effective_qp_weight():
     assert residual == pytest.approx(0.10)
 
 
-def test_route_recovery_cap_bounds_large_residuals_without_inflating_small_ones():
+def test_route_recovery_cap_bounds_large_residuals_without_inflating_small_ones(retargeter_factory):
     """Route caps signed residuals without inflating a small residual."""
     import mujoco
 
-    from terra.retargeter import TerraRetargeter
-
-    retargeter = object.__new__(TerraRetargeter)
-    retargeter._initialize_terra_state()
+    retargeter = retargeter_factory()
     retargeter.robot_model = mujoco.MjModel.from_xml_string(
         "<mujoco><worldbody><body name='ankle'><freejoint/>"
         "<geom type='sphere' size='.02'/><body name='toe' pos='.1 0 0'>"
@@ -1681,14 +1674,11 @@ def test_route_recovery_cap_bounds_large_residuals_without_inflating_small_ones(
     assert terms[1][2] == pytest.approx(0.005)
 
 
-def test_route_weight_activation_does_not_inflate_or_shrink_the_residual_cap():
+def test_route_weight_activation_does_not_inflate_or_shrink_the_residual_cap(retargeter_factory):
     """Weight authority and the bounded residual have independent, explicit roles."""
     import mujoco
 
-    from terra.retargeter import TerraRetargeter
-
-    retargeter = object.__new__(TerraRetargeter)
-    retargeter._initialize_terra_state()
+    retargeter = retargeter_factory()
     retargeter.robot_model = mujoco.MjModel.from_xml_string(
         "<mujoco><worldbody><body name='foot'><freejoint/><geom type='sphere' size='.02'/></body></worldbody></mujoco>"
     )
@@ -1711,13 +1701,10 @@ def test_route_weight_activation_does_not_inflate_or_shrink_the_residual_cap():
     assert residual == pytest.approx(-0.01)
 
 
-def test_route_recovery_cap_validation_is_explicit():
+def test_route_recovery_cap_validation_is_explicit(retargeter_factory):
     import mujoco
 
-    from terra.retargeter import TerraRetargeter
-
-    retargeter = object.__new__(TerraRetargeter)
-    retargeter._initialize_terra_state()
+    retargeter = retargeter_factory()
     retargeter.robot_model = mujoco.MjModel.from_xml_string(
         "<mujoco><worldbody><body name='foot'><freejoint/><geom type='sphere' size='.02'/></body></worldbody></mujoco>"
     )

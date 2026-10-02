@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
-import re
 from pathlib import Path
 
 from terra._files import atomic_write
@@ -27,75 +25,6 @@ SELECTION_FIELDS = (
     "split",
 )
 TERRAIN_MODES = ("flat", "nonflat", "mixed")
-GAIT120_NONFLAT_MOVEMENTS = (
-    "StairAscent",
-    "StairDescent",
-    "SlopeAscent",
-    "SlopeDescent",
-)
-_GAIT120_MOTION = re.compile(
-    r"^Gait120/(?P<subject>S[0-9]{3})/(?P<movement>[^/]+)/"
-    r"Trial(?P<trial>0[1-5])/AllSteps_stageii$"
-)
-
-
-def balanced_gait120_nonflat_motions(
-    motions: list[str],
-    *,
-    per_movement: int,
-    seed: str,
-) -> list[str]:
-    """Select a reproducible subject- and trial-balanced non-flat cohort.
-
-    Subjects must have all five trials for a movement before they are eligible.
-    Each selected subject contributes one motion per movement, and rank-based
-    trial assignment makes every trial equally represented when
-    ``per_movement`` is divisible by five. Movement-specific stable hashing
-    avoids selecting the same subject subset for every terrain direction.
-    """
-    if per_movement <= 0:
-        raise ValueError("Gait120 motions per movement must be positive")
-    if not seed:
-        raise ValueError("Gait120 cohort seed must be non-empty")
-
-    catalog: dict[str, dict[str, dict[str, str]]] = {
-        movement: {} for movement in GAIT120_NONFLAT_MOVEMENTS
-    }
-    for motion in motions:
-        match = _GAIT120_MOTION.fullmatch(motion)
-        if match is None:
-            continue
-        movement = match.group("movement")
-        if movement not in catalog:
-            continue
-        subject_trials = catalog[movement].setdefault(match.group("subject"), {})
-        trial = match.group("trial")
-        if trial in subject_trials:
-            raise ValueError(f"duplicate Gait120 subject/movement/trial: {motion!r}")
-        subject_trials[trial] = motion
-
-    expected_trials = {f"{trial:02d}" for trial in range(1, 6)}
-    selected: list[str] = []
-    for movement in GAIT120_NONFLAT_MOVEMENTS:
-        eligible = [
-            subject
-            for subject, trials in catalog[movement].items()
-            if set(trials) == expected_trials
-        ]
-        eligible.sort(
-            key=lambda subject: hashlib.sha256(
-                f"{seed}:{movement}:{subject}".encode()
-            ).digest()
-        )
-        if len(eligible) < per_movement:
-            raise ValueError(
-                f"Gait120 {movement} has only {len(eligible)} subjects with all five passing trials; "
-                f"cannot select {per_movement}"
-            )
-        for rank, subject in enumerate(eligible[:per_movement]):
-            trial = f"{rank % 5 + 1:02d}"
-            selected.append(catalog[movement][subject][trial])
-    return selected
 
 
 def _load_json(path: Path) -> dict[str, object]:
@@ -162,9 +91,7 @@ def _selection_row(
     try:
         trajectory_relpath = str(validated.trajectory_path.relative_to(cache_root))
         analysis_relpath = str(validated.analysis_path.relative_to(cache_root))
-        terrain_relpath = (
-            "" if validated.terrain_path is None else str(validated.terrain_path.relative_to(cache_root))
-        )
+        terrain_relpath = "" if validated.terrain_path is None else str(validated.terrain_path.relative_to(cache_root))
     except ValueError as error:
         raise ValueError(f"validated artifact escaped its cache root for {motion!r}") from error
     return {
@@ -199,8 +126,6 @@ def build_selection(
     runs: list[Path],
     *,
     motions: list[str] | None = None,
-    gait120_nonflat_per_movement: int | None = None,
-    cohort_seed: str = "terra-gait120-nonflat-v1",
     terrain_mode: str = "nonflat",
     duplicate_policy: str = "error",
 ) -> list[dict[str, str]]:
@@ -222,16 +147,7 @@ def build_selection(
             available[motion] = (run, manifest_row)
             ordered.append(motion)
 
-    if motions is not None and gait120_nonflat_per_movement is not None:
-        raise ValueError("explicit motions and a balanced Gait120 cohort are mutually exclusive")
-    if gait120_nonflat_per_movement is not None:
-        selected = balanced_gait120_nonflat_motions(
-            ordered,
-            per_movement=gait120_nonflat_per_movement,
-            seed=cohort_seed,
-        )
-    else:
-        selected = ordered if motions is None else motions
+    selected = ordered if motions is None else motions
     missing = [motion for motion in selected if motion not in available]
     if missing:
         raise ValueError(f"selection contains motion absent from current TERRA runs: {missing[0]!r}")
@@ -315,19 +231,6 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help="optional explicit ordered CSV/TXT motion list; defaults to every passing run row",
     )
-    parser.add_argument(
-        "--gait120-nonflat-per-movement",
-        type=int,
-        help=(
-            "select this many subjects for each of StairAscent, StairDescent, "
-            "SlopeAscent, and SlopeDescent, balanced across five trials"
-        ),
-    )
-    parser.add_argument(
-        "--cohort-seed",
-        default="terra-gait120-nonflat-v1",
-        help="stable seed used to rank subjects in a balanced Gait120 cohort",
-    )
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument(
         "--report-out",
@@ -372,15 +275,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         roots = StorageRoots.from_environment(Path.cwd())
         if args.cache_root is not None:
-            if args.run or args.motions or args.gait120_nonflat_per_movement is not None:
-                raise ValueError("--cache-root cannot be combined with --run, --motions, or a Gait120 cohort")
+            if args.run or args.motions:
+                raise ValueError("--cache-root cannot be combined with --run or --motions")
             if not args.motion or not args.dataset:
                 raise ValueError("--cache-root requires --motion and --dataset")
             cache_root = roots.resolve_artifact(args.cache_root, base=Path.cwd())
             assert cache_root is not None
-            rows = build_cache_selection(
-                cache_root, args.motion, dataset=args.dataset, terrain_mode=args.terrain_mode
-            )
+            rows = build_cache_selection(cache_root, args.motion, dataset=args.dataset, terrain_mode=args.terrain_mode)
         else:
             if not args.run or args.motion or args.dataset:
                 raise ValueError("provide --run, or use --cache-root with --motion and --dataset")
@@ -391,8 +292,6 @@ def main(argv: list[str] | None = None) -> int:
             rows = build_selection(
                 resolved_runs,
                 motions=selected_motions,
-                gait120_nonflat_per_movement=args.gait120_nonflat_per_movement,
-                cohort_seed=args.cohort_seed,
                 terrain_mode=args.terrain_mode,
                 duplicate_policy=args.duplicate_policy,
             )
@@ -420,7 +319,6 @@ def main(argv: list[str] | None = None) -> int:
 
 __all__ = [
     "SELECTION_FIELDS",
-    "balanced_gait120_nonflat_motions",
     "build_cache_selection",
     "build_selection",
     "main",

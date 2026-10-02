@@ -223,7 +223,7 @@ def run_cohort(
     repo_root: Path | None = None,
     progress: bool = True,
 ) -> CohortResult:
-    """Run one registered method over one immutable ordered denominator."""
+    """Fit and report every motion in the selection, preserving order and failures."""
 
     selection = load_selection(selection_path)
     output_root = output_dir.expanduser().resolve()
@@ -247,7 +247,7 @@ def run_cohort(
                 elapsed=time.perf_counter() - started,
                 summary=summary,
             )
-        except Exception as error:  # keep one bad motion from discarding the denominator
+        except Exception as error:  # keep one bad motion from discarding the selected set
             row = _status_row(
                 motion=motion,
                 method=method,

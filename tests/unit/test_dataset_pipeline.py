@@ -245,8 +245,8 @@ root = "converted"
 mode = "precomputed"
 calibration = "none"
 contact_source = "kinematic"
-source_dir = "reconstruction/voronoi/terrain"
-source_method = "Voronoi"
+source_dir = "reconstruction/terra/terrain"
+source_method = "TERRA"
 [retarget]
 method = "terra"
 smpl_model_path = "models"
@@ -259,8 +259,8 @@ run_root = "experiment/run"
     config = load_dataset_config(config_path)
 
     assert config.terrain_mode == "precomputed"
-    assert config.terrain_source_dir == (tmp_path / "reconstruction/voronoi/terrain").resolve()
-    assert config.terrain_source_method == "voronoi"
+    assert config.terrain_source_dir == (tmp_path / "reconstruction/terra/terrain").resolve()
+    assert config.terrain_source_method == "terra"
     assert config.reference_cache_root == (tmp_path / "canonical/cache").resolve()
 
 
@@ -623,8 +623,8 @@ root = "input"
 mode = "precomputed"
 calibration = "none"
 contact_source = "kinematic"
-source_dir = "reconstruction/voronoi/terrain"
-source_method = "voronoi"
+source_dir = "reconstruction/terra/terrain"
+source_method = "terra"
 [retarget]
 method = "terra"
 smpl_model_path = "models"
@@ -644,7 +644,7 @@ run_root = "experiment/results"
     terrain_record.write_text(
         json.dumps(
             {
-                "method": "voronoi",
+                "method": "terra",
                 "motion": record.motion,
                 "terrain": {"boxes": []},
                 "validation": {"passed": True},
@@ -700,7 +700,7 @@ run_root = "experiment/results"
     result = run_motion(config, record)
 
     assert result["status"] == "ok"
-    assert result["terrain_model"] == "voronoi"
+    assert result["terrain_model"] == "terra"
     assert seen["terrain"] is terrain
     assert seen["method"] == method
     assert seen["fitted_shape_path"] == (
@@ -905,8 +905,6 @@ sample_size = 10
 
     with pytest.raises(ValueError, match="processing policy only"):
         load_dataset_config(path)
-
-
 
 
 def test_evaluation_is_a_separate_non_mutating_dry_run(tmp_path, monkeypatch, capsys):

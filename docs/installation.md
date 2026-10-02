@@ -39,7 +39,8 @@ terra retarget --help
 `uv sync --locked` uses the checked-in lockfile, including TERRA's pinned
 MuscleMimic `terra` branch, SMPL-X package, and Holosoma dependency. It needs
 network access to their Git repositories and package indexes. The Linux x86-64 PyTorch wheel in this lock is a CUDA
-12.6 build, even for CPU fitting; allow disk space and time for the initial download.
+12.6 build, even for CPU fitting. The base environment occupies about **8 GB**;
+allow additional space for uv's download cache, licensed models, and generated results.
 
 Install the extras for your path in one command. For example:
 
@@ -96,3 +97,31 @@ needed for the [video review step](motion-retargeting.md#render-the-motion).
 Continue with [motion loading](motion-files.md),
 [terrain reconstruction](terrain-reconstruction.md),
 [retargeting](motion-retargeting.md), and [policy training](policy-training.md).
+
+## Expected fitting warnings
+
+On the CPU quickstart, JAX may report that the optional TPU backend could not
+initialize and that it is “falling back to cpu.” These messages are expected for
+CPU fitting. For GPU training, a CPU fallback needs investigation; confirm the
+CUDA device with `terra train preflight`.
+
+SMPL-H may print “SMPL+H … 16 shape coefficients” more than once while loading
+models for fitting, reconstruction, and retargeting. This describes the model's
+available shape coefficients and does not indicate a failed fit.
+
+## Release checks
+
+The default test suite needs no licensed assets. To run actual CLI-to-solver checks
+for all four retargeting methods, provide a local AMASS stair motion and neutral model:
+
+```bash
+uv sync --locked --extra dev --extra baselines --extra c3d
+export TERRA_TEST_MOTION="$MOTION_FILE"
+export TERRA_TEST_MODEL_ROOT="$TERRA_MODEL_ROOT"
+# Optional: reuse the quickstart body calibration.
+export TERRA_TEST_SHAPE="$TERRA_ARTIFACT_ROOT/quickstart/MyoFullBody/shape_optimized.pkl"
+.venv/bin/python -m pytest -q --runslow tests/integration
+```
+
+These tests create short motion fixtures and temporary output caches; they do not
+ship model or dataset files. Distribution checks run with `pytest -q --runslow`.

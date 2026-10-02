@@ -1,32 +1,7 @@
-"""Terrain interaction measurement for the unified evaluator.
+"""Measure support, swing clearance, slip, self-collision, and terrain penetration.
 
-This is the metric core of [check_beam_motion.py](check_beam_motion.py), lifted out so that
-the single-motion report, the subset scoring and the video renderer all read the same
-numbers. The renderer in particular has to: a clip whose foot pane is tinted on frames the
-score sheet counts as clean is worse than no video at all.
-
-Four things decide whether a terrain motion is reproducible, and none of them is landmark
-error - a solution can track every landmark to a centimetre and still be walking through the
-staircase:
-
-* **support** - a planted foot resting *on* its surface, neither floating above it nor
-  inside it;
-* **clearance** - a swinging foot actually leaving that surface;
-* **slip** - a planted foot staying where it landed;
-* **self-collision** - the legs not passing through each other.
-
-Plus **body-vs-terrain penetration**, split by which face of a box it is against: the whole
-terrain record so far has been read off a distance minimised over all faces, so a body driven
-through the *end* of a beam hides behind a clean top-face number.
-
-Two rules keep the thresholds honest:
-
-1. **Contact timing comes from the source motion.** The retargeted feet are the thing being
-   judged, so their own contact detection cannot be the reference.
-2. **Clearance and slip are scored against the source's own**, never absolutely. These
-   motions are deliberately low and careful: a fixed clearance threshold either passes a
-   drag or fails a legitimate shuffle, and a fixed slip budget fails every stance of a slow
-   beam crossing that is tracking the source to within a centimetre.
+Contact timing comes from the source motion. Clearance and slip are compared with
+source values so careful low-clearance motions are evaluated consistently.
 """
 
 from __future__ import annotations
@@ -133,7 +108,7 @@ LIMB_PREFIXES = (("l_foot", "r_foot"), ("l_bofoot", "r_bofoot"))
 
 @dataclass(frozen=True)
 class Tolerances:
-    """The budget each failure mode is allowed. Defaults match `check_beam_motion.py`."""
+    """Tolerance limits for each measured interaction failure."""
 
     float_tol: float = QUALITY_THRESHOLDS["float_tol"]  # m above which a stance foot floats
     pen_tol: float = QUALITY_THRESHOLDS["pen_tol"]  # m below a surface that counts as penetration
@@ -699,10 +674,7 @@ def _max_pair_penetration(model, data, pairs: list[tuple[int, int, str]]) -> flo
         return 0.0
     return max(
         0.0,
-        max(
-            -float(mujoco.mj_geomDistance(model, data, first, second, 0.05, None))
-            for first, second, _label in pairs
-        ),
+        max(-float(mujoco.mj_geomDistance(model, data, first, second, 0.05, None)) for first, second, _label in pairs),
     )
 
 
@@ -1077,9 +1049,7 @@ def measure(
             if first_is_env != second_is_env:
                 # OmniRetarget uses the expanded contact list only as a broad phase,
                 # then evaluates each candidate with the exact signed-distance query.
-                exact_distance = float(
-                    mujoco.mj_geomDistance(m, data, int(con.geom1), int(con.geom2), 0.1, None)
-                )
+                exact_distance = float(mujoco.mj_geomDistance(m, data, int(con.geom1), int(con.geom2), 0.1, None))
                 if exact_distance < 0:
                     body_pen[i] = max(body_pen[i], -exact_distance)
             elif not first_is_env and not second_is_env and con.dist < 0:

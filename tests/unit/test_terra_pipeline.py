@@ -204,7 +204,7 @@ def test_gait120_motion_groups_are_stable_and_reset_mixture_is_validated():
 
 
 def test_future_reference_observation_has_height_and_root_relative_ankles_only():
-    goal = object.__new__(TerraGoal)
+    goal = TerraGoal({"upper_body_xml_name": "torso", "sites_for_mimic": []})
     goal._future_reference_offsets = tuple(range(10, 101, 10))
     goal._root_qpos_full_ind = np.asarray([0, 1, 2, 3, 4, 5, 6])
     goal._future_ankle_model_ids = np.asarray([0, 1])
@@ -246,7 +246,7 @@ def test_future_reference_observation_has_height_and_root_relative_ankles_only()
 
 
 def test_future_reference_observation_can_disable_extra_features():
-    goal = object.__new__(TerraGoal)
+    goal = TerraGoal({"upper_body_xml_name": "torso", "sites_for_mimic": []})
     parameters = {
         "enable_future_reference_observations": False,
         "future_reference_stride": 10,
@@ -335,7 +335,7 @@ def test_upstream_tracking_horizons_and_dimension_are_exact():
 
 
 def test_future_target_clamps_to_clip_end_and_marks_invalid():
-    goal = object.__new__(TerraFullBodyTrackingGoal)
+    goal = TerraFullBodyTrackingGoal({"upper_body_xml_name": "torso", "sites_for_mimic": []})
 
     target, valid = goal._bounded_target_step(50, 20, 61, np)
     assert target == 60
@@ -358,7 +358,7 @@ def test_fullbody_tracking_normalizes_parent_root_velocity_indices_for_jax(monke
     )
     model = specification.compile()
     data = mujoco.MjData(model)
-    goal = object.__new__(TerraFullBodyTrackingGoal)
+    goal = TerraFullBodyTrackingGoal({"upper_body_xml_name": "torso", "sites_for_mimic": []})
     goal.lookahead_steps = (1,)
     goal._info_props = {"sites_for_mimic": ["pelvis_mimic"]}
 
@@ -514,7 +514,7 @@ def test_visual_geometry_binding_uses_names_after_terrain_insertion():
         </mujoco>
         """
     )
-    goal = object.__new__(TerraGoalVisual)
+    goal = TerraGoalVisual({"upper_body_xml_name": "torso", "sites_for_mimic": []})
     goal._geom_names = ("bone_a", "bone_b")
     goal._bound_model_id = None
 
@@ -533,7 +533,16 @@ class _PushCarry:
 
 
 def test_velocity_push_changes_only_root_twist_and_reschedules(monkeypatch):
-    randomizer = object.__new__(DefaultRandomizer)
+    model = mujoco.MjModel.from_xml_string(
+        "<mujoco><worldbody><body name='prefix'><joint type='slide'/><joint type='hinge'/><geom size='.1'/></body>"
+        "<body name='pelvis'><freejoint name='root'/><geom size='.1'/></body></worldbody></mujoco>"
+    )
+    setup = SimpleNamespace(
+        model=model,
+        _get_all_info_properties=lambda: {"root_body_name": "pelvis", "root_free_joint_xml_name": "root"},
+        obs_container=SimpleNamespace(get_randomizable_obs_indices=lambda: np.empty(0, dtype=int)),
+    )
+    randomizer = DefaultRandomizer(setup)
     randomizer.rand_conf = {
         "apply_velocity_pushes": True,
         "push_interval_range_s": [1.0, 1.0],

@@ -1,0 +1,27 @@
+schema_version = 1
+
+[dataset]
+name = "amass"
+description = "AMASS-compatible SMPL-H motions; no conversion is required."
+
+[input]
+root = "data/AMASS"
+glob = "**/*.npz"
+
+[terrain]
+mode = "fit"
+calibration = "none"
+contact_source = "kinematic"
+contact_joints = ["L_Toe", "R_Toe", "L_Ankle", "R_Ankle"]
+calibrate_sites = true
+
+[terrain.fit]
+
+[retarget]
+method = "terra"
+env_name = "MyoFullBody"
+smpl_model_path = "smpl"
+cache_root = "runs/amass/cache"
+run_root = "runs/amass/retarget"
+
+[retarget.overrides]

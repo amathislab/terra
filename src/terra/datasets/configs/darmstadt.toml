@@ -1,0 +1,29 @@
+schema_version = 1
+
+[dataset]
+name = "darmstadt"
+description = "Darmstadt touchdown-bounded stair traversals."
+
+[input]
+root = "runs/darmstadt/smplh"
+manifest = "runs/darmstadt/smplh/manifest.csv"
+
+[terrain]
+mode = "fit"
+calibration = "self"
+contact_source = "kinematic"
+contact_joints = ["L_Toe", "R_Toe", "L_Ankle", "R_Ankle"]
+calibrate_sites = true
+
+[terrain.fit]
+
+[retarget]
+method = "terra"
+env_name = "MyoFullBody"
+smpl_model_path = "smpl"
+cache_root = "runs/darmstadt/cache"
+run_root = "runs/darmstadt/retarget"
+
+[retarget.overrides]
+foot_orient_weight = 0.0
+upper_orient_weight = 0.0

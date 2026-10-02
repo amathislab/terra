@@ -1,0 +1,31 @@
+schema_version = 1
+
+[dataset]
+name = "vielemeyer"
+description = "Vielemeyer ramp walking C3D trials with subject-level flat calibration."
+
+[input]
+root = "runs/vielemeyer/smplh"
+manifest = "runs/vielemeyer/smplh/manifest.csv"
+
+[terrain]
+mode = "fit"
+calibration = "manifest"
+contact_source = "kinematic"
+contact_joints = ["L_Toe", "R_Toe", "L_Ankle", "R_Ankle"]
+calibrate_sites = true
+
+[terrain.fit]
+
+[retarget]
+method = "terra"
+env_name = "MyoFullBody"
+smpl_model_path = "smpl"
+cache_root = "runs/vielemeyer/cache"
+run_root = "runs/vielemeyer/retarget"
+
+[retarget.overrides]
+foot_velocity_tracking_weight = 100.0
+foot_orient_weight = 0.0
+stance_height_weight = 200.0
+stance_height_probe_mode = "source_support"

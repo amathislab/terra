@@ -1,4 +1,4 @@
-"""Render an explicit artifact cohort with evaluator-aligned failure annotations."""
+"""Render cached motions, with optional evaluator failure annotations."""
 
 from __future__ import annotations
 
@@ -172,7 +172,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         description=__doc__,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--manifest", type=Path, required=True, help="explicit CSV containing a motion column")
+    p.add_argument("--manifest", type=Path, help="CSV containing a motion column for a collection")
     score_group = p.add_mutually_exclusive_group(required=True)
     score_group.add_argument(
         "--scores",
@@ -193,7 +193,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     p.add_argument("--workers", type=int, default=8)
     p.add_argument("--class", dest="klass", default=None, help="Only this terrain class")
-    p.add_argument("--motion", action="append", default=None, help="Only these motions")
+    p.add_argument(
+        "--motion",
+        action="append",
+        default=None,
+        help="Motion ID in the cache; repeatable. Filters --manifest when supplied.",
+    )
     p.add_argument("--stride", type=int, default=3, help="Render every Nth trajectory frame")
     p.add_argument(
         "--max-rendered-frames",
@@ -216,6 +221,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "CSV and per-frame verdicts are selected so tinting matches the trajectory.",
     )
     args = p.parse_args(argv)
+    if args.manifest is None and not args.motion:
+        p.error("pass --motion or --manifest")
     if args.workers < 1 or args.stride < 1 or args.width < 1:
         p.error("--workers, --stride, and --width must be positive")
     if args.max_rendered_frames is not None and args.max_rendered_frames < 1:
@@ -229,21 +236,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     args.out = roots.resolve_artifact(args.out, base=Path.cwd())
     if args.scores is not None:
         args.scores = roots.resolve_artifact(args.scores, base=Path.cwd())
-    assert args.manifest is not None and args.cache_root is not None and args.out is not None
-    if not args.manifest.is_file():
+    assert args.cache_root is not None and args.out is not None
+    if args.manifest is not None and not args.manifest.is_file():
         p.error(f"manifest does not exist: {args.manifest}")
     _configure_render_environment()
 
-    with args.manifest.open(newline="") as handle:
-        reader = csv.DictReader(handle)
-        if not reader.fieldnames or "motion" not in reader.fieldnames:
-            p.error(f"manifest has no motion column: {args.manifest}")
-        manifest_rows = list(reader)
+    if args.manifest is not None:
+        with args.manifest.open(newline="") as handle:
+            reader = csv.DictReader(handle)
+            if not reader.fieldnames or "motion" not in reader.fieldnames:
+                p.error(f"manifest has no motion column: {args.manifest}")
+            manifest_rows = list(reader)
+        selection = f"manifest {args.manifest}"
+    else:
+        manifest_rows = [{"motion": motion} for motion in args.motion]
+        selection = "--motion selection"
     motion_ids = [row.get("motion", "").strip() for row in manifest_rows]
     if not motion_ids or any(not motion for motion in motion_ids):
-        p.error(f"manifest is empty or contains an empty motion ID: {args.manifest}")
+        p.error(f"{selection} is empty or contains an empty motion ID")
     if len(motion_ids) != len(set(motion_ids)):
-        p.error(f"manifest contains duplicate motion IDs: {args.manifest}")
+        p.error(f"{selection} contains duplicate motion IDs")
+    if args.motion is not None:
+        args.motion = [motion.strip() for motion in args.motion]
     manifest = {motion: row | {"motion": motion} for motion, row in zip(motion_ids, manifest_rows, strict=True)}
 
     quality: dict[str, dict[str, str]] = {}

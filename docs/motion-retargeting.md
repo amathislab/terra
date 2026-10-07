@@ -23,7 +23,11 @@ terra retarget "$MOTION_FILE" \
 The default method is `terra` and the default terrain mode is `auto`. To force flat
 ground, add `--terrain none`. To use already known terrain, pass a compatible terrain
 metadata JSON path via `--terrain`. `--name` is the portable identifier inside the
-cache; it may have relative path components. Reusing an output name raises an error
+cache; it may have relative path components. If you omit `--name`, the identifier is
+the input filename without its extension. For example, `upstairs07_poses.npz` becomes
+`upstairs07_poses`. Spaces and other unsupported characters become underscores.
+Use this identifier in the validation and visualization commands below.
+Reusing an output name raises an error
 unless you pass `--overwrite`.
 
 `terra retarget --help` lists marker-specific inputs. A `.c3d`, `.trc`, or `.mat`
@@ -78,16 +82,29 @@ keep `auto` when your result needs reconstructed stairs or a ramp.
 ## Render the motion
 
 A video is useful for checking body motion and foot placement after artifact
-validation. Make a one-row review manifest and render without evaluator scores:
+validation. Render one motion without a CSV manifest or evaluator scores:
 
 ```bash
-printf 'motion\nFirstRun/motion\n' > "$TERRA_ARTIFACT_ROOT/quickstart/review.csv"
 terra visualize \
-  --manifest "$TERRA_ARTIFACT_ROOT/quickstart/review.csv" \
+  --motion FirstRun/motion \
   --cache-root "$TERRA_ARTIFACT_ROOT/quickstart" \
   --without-scores \
   --out "$TERRA_ARTIFACT_ROOT/quickstart/videos" \
   --workers 1
+```
+
+If you omitted `--name` when retargeting `upstairs07_poses.npz`, use
+`--motion upstairs07_poses` instead. The identifier is relative to the method's
+cache directory. Do not include `.npz`, `MyoFullBody/terra/`, or the input file path.
+Keep `--cache-root` equal to the retarget command's `--output-root`.
+
+Repeat `--motion` to render several motions. For a larger collection, use
+`--manifest /path/to/motions.csv` instead. The CSV needs a `motion` column, with one
+cache identifier per row. For a motion named `upstairs07_poses`, it contains:
+
+```csv
+motion
+upstairs07_poses
 ```
 
 Open `$TERRA_ARTIFACT_ROOT/quickstart/videos/INDEX.md` for the MP4 link. The

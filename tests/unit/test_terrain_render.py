@@ -84,10 +84,7 @@ def test_index_percent_encodes_spaces_in_video_links(tmp_path):
 def test_visualize_index_merges_manifest_metadata_into_scores(tmp_path, monkeypatch):
     motion = "Study/Subject/Trial"
     manifest = tmp_path / "cohort.csv"
-    manifest.write_text(
-        "motion,terrain_class,review_index,source_dataset\n"
-        f"{motion},stairs_up,0,Study\n"
-    )
+    manifest.write_text(f"motion,terrain_class,review_index,source_dataset\n{motion},stairs_up,0,Study\n")
     scores = tmp_path / "scores"
     scores.mkdir()
     scores.joinpath("quality.csv").write_text(
@@ -121,3 +118,64 @@ def test_visualize_index_merges_manifest_metadata_into_scores(tmp_path, monkeypa
     index = (output / "INDEX.md").read_text()
     assert "| 1 | [Trial]" in index
     assert "| Study | stairs_up | 1 |" in index
+
+
+@pytest.mark.parametrize("use_manifest", [False, True])
+def test_visualize_selects_a_cached_motion_by_name(tmp_path, use_manifest):
+    import imageio_ffmpeg
+    import numpy as np
+
+    motion = "upstairs07_poses"
+    output = tmp_path / "videos"
+    trajectory, _terrain = trajectory_paths(motion, cache_root=tmp_path / "cache")
+    trajectory.parent.mkdir(parents=True)
+    trajectory.touch()
+    video = output / "unclassified" / f"{motion}.mp4"
+    video.parent.mkdir(parents=True)
+    writer = imageio_ffmpeg.write_frames(str(video), (16, 16), fps=5)
+    writer.send(None)
+    try:
+        for _ in range(5):
+            writer.send(np.zeros((16, 16, 3), dtype=np.uint8))
+    finally:
+        writer.close()
+    selection = ["--motion", motion]
+    if use_manifest:
+        manifest = tmp_path / "motions.csv"
+        manifest.write_text(f"motion\n{motion}\nother_motion\n")
+        selection += ["--manifest", str(manifest)]
+
+    assert (
+        visualize(
+            [
+                *selection,
+                "--without-scores",
+                "--cache-root",
+                str(tmp_path / "cache"),
+                "--out",
+                str(output),
+                "--index-only",
+            ]
+        )
+        == 0
+    )
+    index = (output / "INDEX.md").read_text()
+    assert f"[{motion}](unclassified/{motion}.mp4)" in index
+    assert "other_motion" not in index
+
+
+@pytest.mark.parametrize("selection", [[], ["--motion", ""], ["--motion", "a", "--motion", "a"]])
+def test_visualize_rejects_missing_empty_or_duplicate_selection(tmp_path, selection):
+    with pytest.raises(SystemExit) as error:
+        visualize(
+            [
+                *selection,
+                "--without-scores",
+                "--cache-root",
+                str(tmp_path / "cache"),
+                "--out",
+                str(tmp_path / "videos"),
+                "--index-only",
+            ]
+        )
+    assert error.value.code == 2

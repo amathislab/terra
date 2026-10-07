@@ -267,6 +267,11 @@ def render_motion(
     from loco_mujoco.core.terrain import TerrainSpec
     from loco_mujoco.trajectory import Trajectory
     from musclemimic.environments.humanoids.myofullbody import MyoFullBody
+    from terra.visualization.scene import STEEL_BLUE, apply_scene_style
+
+    class MotionViewerEnvironment(MyoFullBody):
+        def _apply_spec_changes(self, spec):
+            return apply_scene_style(super()._apply_spec_changes(spec))
 
     traj_path, terrain_path = trajectory_paths(motion, model, method, cache_root=cache_root)
     if terrain_method is not None:
@@ -277,8 +282,12 @@ def render_motion(
         TerrainSpec() if force_flat else TerrainSpec.load(str(terrain_path)) if terrain_path.exists() else TerrainSpec()
     )
 
-    env_kwargs = {} if terrain.is_flat else {"terrain_type": "BoxTerrain", "terrain_params": terrain.to_env_params()}
-    env = MyoFullBody(**env_kwargs, th_params={"random_start": False, "fixed_start_conf": (0, 0)})
+    env_kwargs = (
+        {}
+        if terrain.is_flat
+        else {"terrain_type": "BoxTerrain", "terrain_params": {**terrain.to_env_params(), "rgba": (*STEEL_BLUE, 1.0)}}
+    )
+    env = MotionViewerEnvironment(**env_kwargs, th_params={"random_start": False, "fixed_start_conf": (0, 0)})
     m = env._model
     data = mujoco.MjData(m)
     pelvis = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "pelvis")
@@ -307,9 +316,7 @@ def render_motion(
         opt = mujoco.MjvOption()
         mujoco.mjv_defaultOption(opt)
         opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = True
-        # The environment's skybox is a branded 1024px texture whose lettering sits directly
-        # over the body in the wide pane. Off, the background is flat and the silhouette reads.
-        renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SKYBOX] = False
+        renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = True
 
         idx = range(0, n, stride)
         for k, i in enumerate(idx):

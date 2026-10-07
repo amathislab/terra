@@ -14,6 +14,7 @@ import numpy as np
 from PIL import Image
 
 from loco_mujoco.core.terrain import TerrainSpec
+from terra.visualization.scene import apply_scene_style
 
 
 def render_terrain(source: Path, output: Path, *, width=1280, height=960, azimuth=135.0, elevation=-30.0):
@@ -53,7 +54,7 @@ def render_terrain(source: Path, output: Path, *, width=1280, height=960, azimut
     lower, upper = corners.min(axis=0), corners.max(axis=0)
     center = (lower + upper) / 2
     extent = max(1.0, float(np.linalg.norm(upper - lower)))
-    model = spec.compile()
+    model = apply_scene_style(spec).compile()
     model.stat.center[:] = center
     model.stat.extent = extent
     model.vis.global_.offwidth = width
@@ -69,7 +70,7 @@ def render_terrain(source: Path, output: Path, *, width=1280, height=960, azimut
     output.parent.mkdir(parents=True, exist_ok=True)
     with mujoco.Renderer(model, width=width, height=height) as renderer:
         renderer.update_scene(data, camera=camera)
-        renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = False
+        renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = True
         Image.fromarray(renderer.render()).save(output)
     return len(terrain.boxes)
 

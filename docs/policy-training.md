@@ -150,7 +150,10 @@ python scripts/terra/play_policy.py \
 
 Each motion is saved as `$POLICY_VIDEO_DIR/<motion>/policy.mp4`. The video
 includes the reference motion as a ghost body. Each video stops at the first episode termination, including
-a fall, or at the step limit. Headless recording uses OSMesa; see
+a fall, or at the step limit. Add `--repeat` to record retries until the step limit.
+The scene uses a gray background, steel-blue terrain and reference body, and
+shadows. Muscles are blue when inactive and blend toward red as activation rises.
+Headless recording uses OSMesa; see
 [Optional rendering](installation.md#optional-rendering) for system libraries.
 
 Add `--split evaluation` to use the materialized evaluation split instead of

@@ -32,6 +32,8 @@ def playback_config(config, record: dict, motion: str, video_dir: Path | None):
     """Keep checkpoint observations and network settings; select one paired motion."""
     from omegaconf import OmegaConf
 
+    from terra.visualization.scene import REFERENCE_RGBA
+
     config = OmegaConf.create(OmegaConf.to_container(config, resolve=True))
     exp = config.experiment
     if exp.algorithm != "PPOJax":
@@ -55,7 +57,10 @@ def playback_config(config, record: dict, motion: str, video_dir: Path | None):
         params.goal_type = visual_goals.get(goal, goal)
         params.goal_params.visualize_goal = True
         params.goal_params.enable_enhanced_visualization = True
+        params.goal_params.target_geom_rgba = list(REFERENCE_RGBA)
         params.viewer_size = [640, 480]
+        params.default_camera_mode = "follow"
+        params.camera_params = {"follow": {"azimuth": 135.0, "elevation": -15.0, "distance": 4.0}}
         params.recorder_params = {
             "path": str(video_dir),
             "tag": motion,
@@ -95,6 +100,9 @@ def main(argv=None) -> int:
     parser.add_argument("--split", choices=("train", "evaluation"), default="train")
     parser.add_argument("--video-dir", type=Path, help="save MP4 files here instead of opening the native MuJoCo GUI")
     parser.add_argument("--steps", type=int, default=1000, help="maximum control steps per motion")
+    parser.add_argument(
+        "--repeat", action="store_true", help="retry after episode termination when recording, until --steps"
+    )
     parser.add_argument("--stochastic", action="store_true", help="sample actions instead of using policy means")
     parser.add_argument(
         "--train-state-seed", type=int, default=0, help="seed index for checkpoints trained with multiple seeds"
@@ -107,6 +115,9 @@ def main(argv=None) -> int:
         motions = selected_motions(record, args.split, args.motion)
     except (OSError, ValueError, KeyError, TypeError) as error:
         parser.error(str(error))
+    # One software-rendered motion needs a small thread pool.
+    for name in ("LP_NUM_THREADS", "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+        os.environ.setdefault(name, "1")
     os.environ.setdefault("JAX_PLATFORMS", "cpu")
     if args.video_dir is not None:
         os.environ.setdefault("MUJOCO_GL", "osmesa")
@@ -173,7 +184,7 @@ def main(argv=None) -> int:
                     use_mujoco=True,
                     do_wrap_env=False,
                     train_state_seed=args.train_state_seed,
-                    stop_after_first_episode=True,
+                    stop_after_first_episode=not args.repeat,
                 )
                 print("Video:", video_dir / motion / "policy.mp4", flush=True)
         finally:

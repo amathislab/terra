@@ -15,7 +15,7 @@ from musclemimic.environments.humanoids.myofullbody import (
     MyoFullBody as MuscleMimicMyoFullBody,
 )
 from terra.rl.egocentric import HeadingFrameFreeJointVelocity
-from terra.visualization.scene import remove_scene_logo
+from terra.visualization.scene import STEEL_BLUE, apply_scene_style, update_muscle_colors
 
 
 def _contact_pair_key(pair: Sequence[str]) -> tuple[str, str]:
@@ -75,11 +75,13 @@ class _TerraObservationLayout:
     ) -> None:
         self._use_egocentric_root_observations = bool(use_egocentric_root_observations)
         self._disabled_contact_pairs = _normalize_disabled_contact_pairs(disabled_contact_pairs)
+        if kwargs.get("terrain_type") in {"BoxTerrain", "PairedBoxTerrain"}:
+            kwargs["terrain_params"] = {**(kwargs.get("terrain_params") or {}), "rgba": (*STEEL_BLUE, 1.0)}
         super().__init__(*args, **kwargs)
 
     def _apply_spec_changes(self, spec: MjSpec) -> MjSpec:
         spec = super()._apply_spec_changes(spec)
-        spec = remove_scene_logo(spec)
+        spec = apply_scene_style(spec)
         return _delete_explicit_contact_pairs(spec, self._disabled_contact_pairs)
 
     def _get_observation_specification(self, spec: MjSpec) -> list[ObservationType]:
@@ -158,6 +160,16 @@ class _TerraObservationLayout:
 
 class MyoFullBody(_TerraObservationLayout, MuscleMimicMyoFullBody):
     """CPU MuJoCo environment used for evaluation and rendering."""
+
+    def reset(self, *args, **kwargs):
+        observation = super().reset(*args, **kwargs)
+        update_muscle_colors(self._model, self._data)
+        return observation
+
+    def step(self, action):
+        result = super().step(action)
+        update_muscle_colors(self._model, self._data)
+        return result
 
 
 class MjxMyoFullBody(_TerraObservationLayout, MuscleMimicMjxMyoFullBody):

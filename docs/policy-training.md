@@ -22,7 +22,8 @@ You can skip the CUDA preflight, startup check, and training run for playback.
 First complete the
 [one-motion retarget walkthrough](motion-retargeting.md#run-one-motion) and its
 validation. The tutorial uses `KIT/3/upstairs04_poses.npz`; the downloaded TERRA-4B
-checkpoint completes this motion with mean actions in native MuJoCo. Select the
+checkpoint completes this motion in native MuJoCo. Use sampled actions
+(`--stochastic`) for this checkpoint, as in the manuscript evaluation. Select the
 published motion by its cache identifier. If you omitted
 `--name` for `upstairs04_poses.npz`, use `--motion upstairs04_poses` below.
 The `--dataset` value is a label for this selection. You do not need to rename
@@ -145,7 +146,8 @@ does not change TERRA's locked dependencies.
 
 Use [play_policy.py](../scripts/terra/play_policy.py) to load a saved PPO checkpoint
 and a materialized dataset. This runs the policy in native MuJoCo with the motion's
-paired terrain. It uses the checkpoint's network, observations, and control timestep.
+paired terrain. It uses the checkpoint's network, observations, control timestep,
+and model solver settings.
 Inference defaults to CPU; CUDA is not required for playback.
 
 If you downloaded a checkpoint above, keep `POLICY_CHECKPOINT` and `POLICY_DATASET`
@@ -169,7 +171,8 @@ Run this on a machine with a desktop display:
 ```bash
 python scripts/terra/play_policy.py \
   --checkpoint "$POLICY_CHECKPOINT" \
-  --materialization-record "$POLICY_DATASET"
+  --materialization-record "$POLICY_DATASET" \
+  --stochastic
 ```
 
 The script attempts every motion in the training split, in dataset order.
@@ -188,6 +191,7 @@ export POLICY_VIDEO_DIR="$HOME/terra-policy-videos"
 python scripts/terra/play_policy.py \
   --checkpoint "$POLICY_CHECKPOINT" \
   --materialization-record "$POLICY_DATASET" \
+  --stochastic \
   --video-dir "$POLICY_VIDEO_DIR"
 ```
 
@@ -204,9 +208,11 @@ Add `--split evaluation` to use the materialized evaluation split instead of
 the training split. The materialization record must point to an existing cache.
 
 `--steps 1000` is the default limit per motion: 10 seconds at the default 100 Hz
-control rate. Increase it for longer motions. Actions use the policy mean by default;
-add `--stochastic` to sample actions. For a checkpoint with multiple training seeds,
-use `--train-state-seed N` to choose the seed. Playback uses validation resets.
+control rate. Increase it for longer motions. The examples use sampled actions,
+which improved tracking for the TERRA-4B tutorial motion in native MuJoCo.
+Omit `--stochastic` to use mean actions, the script default. For a checkpoint with
+multiple training seeds, use `--train-state-seed N` to choose the seed. Playback
+uses validation resets.
 
 The global and upper-body tracking error limits default to **0.25 m**, as in the
 manuscript evaluation. The saved TERRA-4B training configuration uses 0.15 m;

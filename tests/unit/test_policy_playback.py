@@ -88,6 +88,11 @@ def test_playback_preserves_checkpoint_inputs_and_uses_the_new_dataset(
     assert params.terminal_state_params.mean_site_deviation_threshold == tracking_threshold
     assert params.terminal_state_params.core_upper_body_mean_site_deviation_threshold == tracking_threshold
     assert params.terminal_state_params.root_orientation_threshold == 1.0
+    assert params.model_option_conf.iterations == 4
+    assert params.model_option_conf.ls_iterations == 8
+    import mujoco
+
+    assert params.model_option_conf.disableflags == int(mujoco.mjtDisableBit.mjDSBL_EULERDAMP)
     assert params.env_name == "MyoFullBody"
     assert params.headless == video
     assert params.th_params.fixed_start_conf == [0, 0]
@@ -103,3 +108,22 @@ def test_playback_preserves_checkpoint_inputs_and_uses_the_new_dataset(
         assert params.goal_type == ("TerraGoalVisual" if show_reference else "TerraGoal")
         assert params.viewer_size == [1280, 720]
         assert not params.show_debug_overlay
+
+
+@pytest.mark.parametrize("env_name", ["MyoFullBody", "MjxMyoFullBody"])
+def test_playback_keeps_explicit_model_options(env_name):
+    config = OmegaConf.create(
+        {
+            "experiment": {
+                "algorithm": "PPOJax",
+                "env_params": {
+                    "env_name": env_name,
+                    "goal_type": "TerraGoal",
+                    "model_option_conf": {"iterations": 12, "ls_iterations": 9, "disableflags": 0},
+                },
+                "task_factory": {"params": {"amass_dataset_conf": {}}},
+            }
+        }
+    )
+    result = script["playback_config"](config, {"destination_cache": "/tmp/cache"}, "motion", None)
+    assert result.experiment.env_params.model_option_conf == config.experiment.env_params.model_option_conf

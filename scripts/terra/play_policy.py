@@ -55,6 +55,15 @@ def playback_config(
         params.terminal_state_params.core_upper_body_mean_site_deviation_threshold = tracking_threshold
         params.terminal_state_params.curriculum_initial_global_threshold = tracking_threshold
         params.terminal_state_params.core_upper_body_curriculum_initial_threshold = tracking_threshold
+    # Keep the MJX environment's physics defaults when using native MuJoCo.
+    if params.env_name == "MjxMyoFullBody" and params.get("model_option_conf") is None:
+        import mujoco
+
+        params.model_option_conf = {
+            "iterations": 4,
+            "ls_iterations": 8,
+            "disableflags": int(mujoco.mjtDisableBit.mjDSBL_EULERDAMP),
+        }
     params.env_name = str(params.env_name).removeprefix("Mjx")
     params.headless = video_dir is not None
     for key in list(params):

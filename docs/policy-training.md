@@ -105,25 +105,29 @@ establish task performance.
 
 ## Download a pre-trained checkpoint
 
-Download released checkpoints from their public Hugging Face model repository.
-This guide does not yet specify a TERRA-6B repository or release revision. The
-commands below are a template until these values are added.
+The [TERRA-4B checkpoint](https://huggingface.co/merc-s/TERRA-4B) is the primary
+training-seed-0 policy used in the manuscript tables. It has 4,000,317,440 training
+steps (PPO update 24,416). The repository is currently private; an account with
+access is required. Log in on the machine where you will download it:
 
-Use the repository ID and release revision from the checkpoint's model card.
-Replace both values below before running the download:
+```bash
+uvx --from huggingface_hub hf auth login
+```
+
+Download the complete checkpoint at the tested release revision:
 
 ```bash
 export TERRA_ARTIFACT_ROOT="${TERRA_ARTIFACT_ROOT:-$HOME/terra-results}"
-export POLICY_REPO="<owner>/TERRA-6B"
-export POLICY_REVISION="<release-tag-or-commit>"
-export POLICY_CHECKPOINT="$TERRA_ARTIFACT_ROOT/checkpoints/TERRA-6B"
+export POLICY_REPO="merc-s/TERRA-4B"
+export POLICY_REVISION="b89a604d0687549f2678bb1b6a436dea058cd8b9"
+export POLICY_CHECKPOINT="$TERRA_ARTIFACT_ROOT/checkpoints/TERRA-4B"
 uvx --from huggingface_hub hf download "$POLICY_REPO" \
   --revision "$POLICY_REVISION" \
   --local-dir "$POLICY_CHECKPOINT"
 export POLICY_DATASET="$TERRA_ARTIFACT_ROOT/training/materialization.json"
 ```
 
-The download must contain a complete `checkpoint_N` directory directly under
+The download contains the complete `checkpoint_24416` directory directly under
 `$POLICY_CHECKPOINT`, including its saved configuration, state, and metadata.
 Keep its files together. The playback script selects the latest completed
 checkpoint in this directory. Follow [Watch a trained policy](#watch-a-trained-policy)
@@ -131,9 +135,10 @@ with these two environment variables; do not replace them with the example paths
 
 A checkpoint does not include the motion dataset. Create your local materialization
 record with `terra train materialize`, as shown above. Use the model card's supported
-robot, observations, and control rate when preparing the motions. Public downloads
-do not require a Hugging Face login. The download tool runs in a separate environment
-and does not change TERRA's locked dependencies.
+robot, observations, and control rate when preparing the motions. This checkpoint
+uses MyoFullBody and a 100 Hz control rate. It does not include the baseline policies
+or all three training seeds. The download tool runs in a separate environment and
+does not change TERRA's locked dependencies.
 
 ## Watch a trained policy
 

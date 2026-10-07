@@ -106,16 +106,18 @@ and a materialized dataset. This runs the policy in native MuJoCo with the motio
 paired terrain. It uses the checkpoint's network, observations, and control timestep.
 Inference defaults to CPU; CUDA is not required for playback.
 
-Choose a `checkpoint_N` directory from your training run. To locate the one-update
-checkpoint from the startup check above:
+Choose a saved `checkpoint_N` directory from any TERRA PPO training run.
+Choose a materialization record for the motions you want to watch:
 
 ```bash
-find "$TERRA_ARTIFACT_ROOT/training/smoke/checkpoints" -type d -name 'checkpoint_1'
-export POLICY_CHECKPOINT="/absolute/path/from/the/list/checkpoint_1"
+export POLICY_CHECKPOINT="/absolute/path/to/checkpoint_500"
+export POLICY_DATASET="/absolute/path/to/materialization.json"
 ```
 
 You can also pass the checkpoint's immediate parent directory. The script selects
-its latest completed checkpoint.
+its latest completed checkpoint. The dataset can be the training selection or
+another compatible selection created with `terra train materialize`. It must
+point to materialized MyoFullBody trajectories and any terrain metadata.
 
 ### Open the native MuJoCo GUI
 
@@ -124,44 +126,41 @@ Run this on a machine with a desktop display:
 ```bash
 python scripts/terra/play_policy.py \
   --checkpoint "$POLICY_CHECKPOINT" \
-  --materialization-record "$TERRA_ARTIFACT_ROOT/training/materialization.json" \
-  --motion FirstRun/motion
+  --materialization-record "$POLICY_DATASET"
 ```
 
-Use the cache identifier from retargeting. For a default-named `upstairs07_poses.npz`,
-replace `FirstRun/motion` with `upstairs07_poses`. Drag the mouse to change the view
-and scroll to zoom. Press Escape to close the current motion's window. The GUI retries
-the motion after a fall or other episode termination, until the step limit is reached.
+The script attempts every motion in the training split, in dataset order.
+To choose one motion, add `--motion Dataset/Subject/motion`. Use its identifier
+from the record's `motion` field, without `.npz`. Repeat `--motion` to choose
+several motions. Drag the mouse to change the view and scroll to zoom.
+Press Escape to close the current motion's window. The GUI retries the motion
+after a fall or other episode termination, until the step limit is reached.
 
 ### Save a video
 
 Add `--video-dir` to save a video instead of opening a window:
 
 ```bash
+export POLICY_VIDEO_DIR="$HOME/terra-policy-videos"
 python scripts/terra/play_policy.py \
   --checkpoint "$POLICY_CHECKPOINT" \
-  --materialization-record "$TERRA_ARTIFACT_ROOT/training/materialization.json" \
-  --motion FirstRun/motion \
-  --video-dir "$TERRA_ARTIFACT_ROOT/training/policy-videos"
+  --materialization-record "$POLICY_DATASET" \
+  --video-dir "$POLICY_VIDEO_DIR"
 ```
 
-Open `policy-videos/FirstRun/motion/policy.mp4`. The video includes the reference
-motion as a ghost body. Each video stops at the first episode termination, including
+Each motion is saved as `$POLICY_VIDEO_DIR/<motion>/policy.mp4`. The video
+includes the reference motion as a ghost body. Each video stops at the first episode termination, including
 a fall, or at the step limit. Headless recording uses OSMesa; see
 [Optional rendering](installation.md#optional-rendering) for system libraries.
 
-Omit `--motion` to attempt every motion in the selected dataset split, in order.
-Repeat `--motion` to choose several motions. Add `--split evaluation` to use a
-materialized evaluation split. Training is the default split. The materialization
-record must point to an existing cache; it can come from a different compatible
-selection than the training dataset.
+Add `--split evaluation` to use the materialized evaluation split instead of
+the training split. The materialization record must point to an existing cache.
 
 `--steps 1000` is the default limit per motion: 10 seconds at the default 100 Hz
 control rate. Increase it for longer motions. Actions use the policy mean by default;
 add `--stochastic` to sample actions. For a checkpoint with multiple training seeds,
 use `--train-state-seed N` to choose the seed. Playback uses validation resets and
-keeps the checkpoint's termination rules. A one-update startup checkpoint can be
-loaded, but it will usually fail to track the motion.
+keeps the checkpoint's termination rules.
 
 ## Validation options
 

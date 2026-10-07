@@ -15,6 +15,7 @@ from musclemimic.environments.humanoids.myofullbody import (
     MyoFullBody as MuscleMimicMyoFullBody,
 )
 from terra.rl.egocentric import HeadingFrameFreeJointVelocity
+from terra.visualization.scene import remove_scene_logo
 
 
 def _contact_pair_key(pair: Sequence[str]) -> tuple[str, str]:
@@ -78,6 +79,7 @@ class _TerraObservationLayout:
 
     def _apply_spec_changes(self, spec: MjSpec) -> MjSpec:
         spec = super()._apply_spec_changes(spec)
+        spec = remove_scene_logo(spec)
         return _delete_explicit_contact_pairs(spec, self._disabled_contact_pairs)
 
     def _get_observation_specification(self, spec: MjSpec) -> list[ObservationType]:

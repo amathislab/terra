@@ -23,8 +23,11 @@ def test_motion_selection_uses_the_requested_split_and_order():
         script["selected_motions"](record, "train", ["KIT/4/walk"])
 
 
-@pytest.mark.parametrize("video", [False, True])
-def test_playback_preserves_checkpoint_inputs_and_uses_the_new_dataset(tmp_path, video):
+@pytest.mark.parametrize("video,show_reference", [(False, False), (True, False), (True, True)])
+@pytest.mark.parametrize("tracking_threshold", [0.15, 0.25])
+def test_playback_preserves_checkpoint_inputs_and_uses_the_new_dataset(
+    tmp_path, video, show_reference, tracking_threshold
+):
     config = OmegaConf.create(
         {
             "experiment": {
@@ -45,7 +48,16 @@ def test_playback_preserves_checkpoint_inputs_and_uses_the_new_dataset(tmp_path,
                     "goal_type": "TerraGoal",
                     "goal_params": {"future_reference_stride": 10},
                 },
-                "validation": {"init_state_type": "TrajInitialStateHandler", "init_state_params": {}},
+                "validation": {
+                    "init_state_type": "TrajInitialStateHandler",
+                    "init_state_params": {},
+                    "terminal_state_type": "TerraGlobalMPJPETerminalStateHandler",
+                    "terminal_state_params": {
+                        "mean_site_deviation_threshold": 0.15,
+                        "core_upper_body_mean_site_deviation_threshold": 0.15,
+                        "root_orientation_threshold": 1.0,
+                    },
+                },
                 "task_factory": {
                     "params": {
                         "trajectory_cache_root": "/old/cache",
@@ -58,7 +70,14 @@ def test_playback_preserves_checkpoint_inputs_and_uses_the_new_dataset(tmp_path,
     )
     original = OmegaConf.to_container(config)
     record = {"destination_cache": str(tmp_path / "new-cache"), "terrain_mode": "mixed"}
-    result = script["playback_config"](config, record, "upstairs07_poses", tmp_path if video else None)
+    result = script["playback_config"](
+        config,
+        record,
+        "upstairs07_poses",
+        tmp_path if video else None,
+        tracking_threshold=tracking_threshold,
+        show_reference=show_reference,
+    )
     assert OmegaConf.to_container(config) == original
     assert result.experiment.actor_hidden_layers == config.experiment.actor_hidden_layers
     assert result.experiment.len_obs_history == config.experiment.len_obs_history
@@ -66,6 +85,9 @@ def test_playback_preserves_checkpoint_inputs_and_uses_the_new_dataset(tmp_path,
     assert params.enable_heightmap_observations
     assert params.use_egocentric_root_observations
     assert params.goal_params.future_reference_stride == 10
+    assert params.terminal_state_params.mean_site_deviation_threshold == tracking_threshold
+    assert params.terminal_state_params.core_upper_body_mean_site_deviation_threshold == tracking_threshold
+    assert params.terminal_state_params.root_orientation_threshold == 1.0
     assert params.env_name == "MyoFullBody"
     assert params.headless == video
     assert params.th_params.fixed_start_conf == [0, 0]
@@ -78,4 +100,6 @@ def test_playback_preserves_checkpoint_inputs_and_uses_the_new_dataset(tmp_path,
     assert not factory.amass_dataset_conf.require_nonflat_terrain
     if video:
         assert params.recorder_params.fps == 100
-        assert params.goal_type == "TerraGoalVisual"
+        assert params.goal_type == ("TerraGoalVisual" if show_reference else "TerraGoal")
+        assert params.viewer_size == [1280, 720]
+        assert not params.show_debug_overlay

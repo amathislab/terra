@@ -161,6 +161,13 @@ class _TerraObservationLayout:
 class MyoFullBody(_TerraObservationLayout, MuscleMimicMyoFullBody):
     """CPU MuJoCo environment used for evaluation and rendering."""
 
+    def __init__(self, *args, show_debug_overlay=True, **kwargs):
+        self.show_debug_overlay = show_debug_overlay
+        super().__init__(*args, **kwargs)
+
+    def render(self, record=False, debug_info=None):
+        return super().render(record=record, debug_info=debug_info if self.show_debug_overlay else None)
+
     def reset(self, *args, **kwargs):
         observation = super().reset(*args, **kwargs)
         update_muscle_colors(self._model, self._data)

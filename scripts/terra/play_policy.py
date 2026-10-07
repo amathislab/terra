@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 import threading
@@ -28,7 +29,9 @@ def selected_motions(record: dict, split: str, motions: list[str] | None) -> lis
     return selected
 
 
-def playback_config(config, record: dict, motion: str, video_dir: Path | None):
+def playback_config(
+    config, record: dict, motion: str, video_dir: Path | None, *, tracking_threshold=0.25, show_reference=False
+):
     """Keep checkpoint observations and network settings; select one paired motion."""
     from omegaconf import OmegaConf
 
@@ -45,6 +48,13 @@ def playback_config(config, record: dict, motion: str, video_dir: Path | None):
     for name in ("init_state_type", "init_state_params", "terminal_state_type", "terminal_state_params"):
         if name in validation:
             params[name] = validation[name]
+    # The published policy was evaluated at 25 cm, while its saved training
+    # configuration contains the stricter 15 cm training threshold.
+    if params.get("terminal_state_type") == "TerraGlobalMPJPETerminalStateHandler":
+        params.terminal_state_params.mean_site_deviation_threshold = tracking_threshold
+        params.terminal_state_params.core_upper_body_mean_site_deviation_threshold = tracking_threshold
+        params.terminal_state_params.curriculum_initial_global_threshold = tracking_threshold
+        params.terminal_state_params.core_upper_body_curriculum_initial_threshold = tracking_threshold
     params.env_name = str(params.env_name).removeprefix("Mjx")
     params.headless = video_dir is not None
     for key in list(params):
@@ -54,13 +64,15 @@ def playback_config(config, record: dict, motion: str, video_dir: Path | None):
     goal = str(params.goal_type)
     visual_goals = {"TerraGoal": "TerraGoalVisual", "TerraFullBodyTrackingGoal": "TerraFullBodyTrackingGoalVisual"}
     if video_dir is not None:
-        params.goal_type = visual_goals.get(goal, goal)
-        params.goal_params.visualize_goal = True
-        params.goal_params.enable_enhanced_visualization = True
-        params.goal_params.target_geom_rgba = list(REFERENCE_RGBA)
-        params.viewer_size = [640, 480]
+        if show_reference:
+            params.goal_type = visual_goals.get(goal, goal)
+            params.goal_params.visualize_goal = True
+            params.goal_params.enable_enhanced_visualization = True
+            params.goal_params.target_geom_rgba = list(REFERENCE_RGBA)
+        params.show_debug_overlay = False
+        params.viewer_size = [1280, 720]
         params.default_camera_mode = "follow"
-        params.camera_params = {"follow": {"azimuth": 135.0, "elevation": -15.0, "distance": 4.0}}
+        params.camera_params = {"follow": {"azimuth": 135.0, "elevation": -15.0, "distance": 3.0}}
         params.recorder_params = {
             "path": str(video_dir),
             "tag": motion,
@@ -103,6 +115,13 @@ def main(argv=None) -> int:
     parser.add_argument(
         "--repeat", action="store_true", help="retry after episode termination when recording, until --steps"
     )
+    parser.add_argument("--show-reference", action="store_true", help="overlay the reference body in saved videos")
+    parser.add_argument(
+        "--tracking-threshold",
+        type=float,
+        default=0.25,
+        help="global and upper-body tracking error limit in metres (default: 0.25, as in the manuscript)",
+    )
     parser.add_argument("--stochastic", action="store_true", help="sample actions instead of using policy means")
     parser.add_argument(
         "--train-state-seed", type=int, default=0, help="seed index for checkpoints trained with multiple seeds"
@@ -110,6 +129,8 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     if args.steps < 1 or args.train_state_seed < 0:
         parser.error("--steps must be positive and --train-state-seed must be non-negative")
+    if not math.isfinite(args.tracking_threshold) or args.tracking_threshold <= 0:
+        parser.error("--tracking-threshold must be finite and positive")
     try:
         record = json.loads(args.materialization_record.expanduser().read_text())
         motions = selected_motions(record, args.split, args.motion)
@@ -146,7 +167,14 @@ def main(argv=None) -> int:
             record["destination_cache"], motion, method=record.get("retargeting_method", "terra")
         )
         np.random.seed(0)
-        run_config = playback_config(config, record, motion, video_dir)
+        run_config = playback_config(
+            config,
+            record,
+            motion,
+            video_dir,
+            tracking_threshold=args.tracking_threshold,
+            show_reference=args.show_reference,
+        )
         exp = run_config.experiment
         env = TerraImitationFactory.make(
             **OmegaConf.to_container(exp.env_params, resolve=True),
@@ -155,7 +183,12 @@ def main(argv=None) -> int:
         try:
             agent_conf = PPOJax.init_agent_conf(env, run_config)
             agent_state = PPOJax.restore_agent_state(saved_state.train_state, agent_conf)
-            print(f"Playing {motion} on its paired terrain", flush=True)
+            print(
+                f"Playing {motion} on its paired terrain "
+                f"(tracking threshold: {args.tracking_threshold:g} m; "
+                f"actions: {'sampled' if args.stochastic else 'mean'})",
+                flush=True,
+            )
             if video_dir is None:
                 existing_threads = set(threading.enumerate())
                 run_with_mujoco_viewer(

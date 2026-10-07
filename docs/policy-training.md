@@ -190,10 +190,11 @@ python scripts/terra/play_policy.py \
 ```
 
 Each motion is saved as `$POLICY_VIDEO_DIR/<motion>/policy.mp4`. The video
-includes the reference motion as a ghost body. Each video stops at the first episode termination, including
+shows the policy alone at 1280 × 720, without debug text. Add `--show-reference`
+to overlay the reference motion as a ghost body. Each video stops at the first episode termination, including
 a fall, or at the step limit. Add `--repeat` to record retries until the step limit.
-The scene uses a gray background, steel-blue terrain and reference body, and
-shadows. Muscles are blue when inactive and blend toward red as activation rises.
+The scene uses a gray background, steel-blue terrain, and shadows. Muscles are blue
+when inactive and blend toward red as activation rises.
 Headless recording uses OSMesa; see
 [Optional rendering](installation.md#optional-rendering) for system libraries.
 
@@ -203,8 +204,15 @@ the training split. The materialization record must point to an existing cache.
 `--steps 1000` is the default limit per motion: 10 seconds at the default 100 Hz
 control rate. Increase it for longer motions. Actions use the policy mean by default;
 add `--stochastic` to sample actions. For a checkpoint with multiple training seeds,
-use `--train-state-seed N` to choose the seed. Playback uses validation resets and
-keeps the checkpoint's termination rules.
+use `--train-state-seed N` to choose the seed. Playback uses validation resets.
+
+The global and upper-body tracking error limits default to **0.25 m**, as in the
+manuscript evaluation. The saved TERRA-4B training configuration uses 0.15 m;
+that stricter limit can stop an attempt while the body is still upright and moving.
+Use `--tracking-threshold 0.15` to apply that limit, or another positive value for
+your own checkpoint. Root-orientation and other termination rules are unchanged.
+The manuscript used sampled actions; add `--stochastic` to use that setting.
+Completion can differ across sampled attempts.
 
 ## Validation options
 

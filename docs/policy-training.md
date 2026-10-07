@@ -13,6 +13,10 @@ The one-motion path below checks that your installation can reach a PPO update. 
 a recording with several seconds of continuous motion so the tracking goal has useful
 lookahead frames. This startup exercise does not establish a useful general policy.
 
+To use a pre-trained policy, prepare and materialize a motion selection below,
+then go to [Download a pre-trained checkpoint](#download-a-pre-trained-checkpoint).
+You can skip the CUDA preflight, startup check, and training run for playback.
+
 ## Prepare a small local selection
 
 First complete the
@@ -99,6 +103,38 @@ output, and rerun without `--dry-run`. Tune the configuration to available GPU m
 checkpoints together. The one-update smoke test checks startup only; it does not
 establish task performance.
 
+## Download a pre-trained checkpoint
+
+Download released checkpoints from their public Hugging Face model repository.
+This guide does not yet specify a TERRA-6B repository or release revision. The
+commands below are a template until these values are added.
+
+Use the repository ID and release revision from the checkpoint's model card.
+Replace both values below before running the download:
+
+```bash
+export TERRA_ARTIFACT_ROOT="${TERRA_ARTIFACT_ROOT:-$HOME/terra-results}"
+export POLICY_REPO="<owner>/TERRA-6B"
+export POLICY_REVISION="<release-tag-or-commit>"
+export POLICY_CHECKPOINT="$TERRA_ARTIFACT_ROOT/checkpoints/TERRA-6B"
+uvx --from huggingface_hub hf download "$POLICY_REPO" \
+  --revision "$POLICY_REVISION" \
+  --local-dir "$POLICY_CHECKPOINT"
+export POLICY_DATASET="$TERRA_ARTIFACT_ROOT/training/materialization.json"
+```
+
+The download must contain a complete `checkpoint_N` directory directly under
+`$POLICY_CHECKPOINT`, including its saved configuration, state, and metadata.
+Keep its files together. The playback script selects the latest completed
+checkpoint in this directory. Follow [Watch a trained policy](#watch-a-trained-policy)
+with these two environment variables; do not replace them with the example paths.
+
+A checkpoint does not include the motion dataset. Create your local materialization
+record with `terra train materialize`, as shown above. Use the model card's supported
+robot, observations, and control rate when preparing the motions. Public downloads
+do not require a Hugging Face login. The download tool runs in a separate environment
+and does not change TERRA's locked dependencies.
+
 ## Watch a trained policy
 
 Use [play_policy.py](../scripts/terra/play_policy.py) to load a saved PPO checkpoint
@@ -106,8 +142,9 @@ and a materialized dataset. This runs the policy in native MuJoCo with the motio
 paired terrain. It uses the checkpoint's network, observations, and control timestep.
 Inference defaults to CPU; CUDA is not required for playback.
 
-Choose a saved `checkpoint_N` directory from any TERRA PPO training run.
-Choose a materialization record for the motions you want to watch:
+If you downloaded a checkpoint above, keep `POLICY_CHECKPOINT` and `POLICY_DATASET`
+as set there. Otherwise, choose a saved `checkpoint_N` directory from a TERRA PPO
+training run and a materialization record for the motions you want to watch:
 
 ```bash
 export POLICY_CHECKPOINT="/absolute/path/to/checkpoint_500"

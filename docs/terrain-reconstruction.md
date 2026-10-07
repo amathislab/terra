@@ -72,4 +72,24 @@ The cohort record is a reconstruction report. For
 terrain input format. Use `--terrain auto` to let the one-motion retarget command
 estimate terrain directly.
 
+## View the terrain fit
+
+Render each successful fit to a PNG image before retargeting:
+
+```bash
+python scripts/terra/render_terrain.py "$TERRA_ARTIFACT_ROOT/reconstruction/terra"
+```
+
+Open the PNG files in that directory. Each image shows the fitted surfaces and
+floor in MuJoCo. The camera includes all terrain boxes. A flat fit shows only
+the floor. Use the images to inspect the surface shape and placement, then read
+the validation report to check support for the motion.
+
+You can also pass one fit JSON file. Use `--output-dir` to save the images in
+another directory. Use `--azimuth` and `--elevation` to adjust the view, in degrees.
+
+The script uses the same headless rendering backend as the motion viewer. See
+[rendering setup](installation.md#optional-rendering) if MuJoCo cannot create a
+rendering context.
+
 Next: [Motion retargeting](motion-retargeting.md).

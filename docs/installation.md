@@ -75,12 +75,13 @@ checks software and configuration only. A successful software check does not est
 that a later GPU run will work. Use [Policy training](policy-training.md) for the
 materialized cohort and one-update startup test.
 
-## Optional video rendering
+## Optional rendering
 
-`terra visualize` renders MP4 reviews with MuJoCo's headless OSMesa backend by
-default. Install a system `libOSMesa` library if rendering reports that the
-backend is unavailable. This is separate from the Python lockfile and is only
-needed for the [video review step](motion-retargeting.md#render-the-motion).
+The terrain image script and `terra visualize` use MuJoCo's headless OSMesa
+backend by default. Install a system `libOSMesa` library if MuJoCo cannot create
+a rendering context. The Python lockfile does not install this system library.
+It is needed for [terrain images](terrain-reconstruction.md#view-the-terrain-fit)
+and the [video review step](motion-retargeting.md#render-the-motion).
 
 ## If setup stops
 

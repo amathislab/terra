@@ -92,7 +92,7 @@ terra visualize \
 
 Open `$TERRA_ARTIFACT_ROOT/quickstart/videos/INDEX.md` for the MP4 link. The
 default headless MuJoCo renderer uses OSMesa; see the
-[installation note](installation.md#optional-video-rendering) if that system
+[installation note](installation.md#optional-rendering) if that system
 library is unavailable. Add evaluator scores later for contact and failure
 annotations.
 

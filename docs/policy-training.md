@@ -21,8 +21,10 @@ You can skip the CUDA preflight, startup check, and training run for playback.
 
 First complete the
 [one-motion retarget walkthrough](motion-retargeting.md#run-one-motion) and its
-validation. Select that published motion by its cache identifier. If you omitted
-`--name` for `upstairs07_poses.npz`, use `--motion upstairs07_poses` below.
+validation. The tutorial uses `KIT/3/upstairs04_poses.npz`; the downloaded TERRA-4B
+checkpoint completes this motion with mean actions in native MuJoCo. Select the
+published motion by its cache identifier. If you omitted
+`--name` for `upstairs04_poses.npz`, use `--motion upstairs04_poses` below.
 The `--dataset` value is a label for this selection. You do not need to rename
 the cached motion. The selector validates the trajectory and sidecars before
 writing the manifest:
@@ -60,7 +62,7 @@ startup validation. For a real experiment, select a larger, diverse training set
 a separate evaluation split with `terra train select --evaluation-fraction` before
 segmentation. Keep source identities and their segments in the same split when building a larger
 cohort. Automatic evaluation and test splits require identifiers that include the
-dataset and person, such as `KIT/3/upstairs07_poses`. A default filename alone
+dataset and person, such as `KIT/3/upstairs04_poses`. A default filename alone
 does not identify the person. Record the selection and materialization report
 alongside each training run.
 

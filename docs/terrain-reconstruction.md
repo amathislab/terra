@@ -47,7 +47,7 @@ shape, so it is not fitted twice. `MOTION_FILE` must be below
 
 For several motions, repeat `--motion`, or pass `--motions selection.txt`. A
 selection file contains IDs relative to the configured input root, without the
-`.npz` suffix, for example `KIT/3/upstairs09_poses`. A CSV with a `motion` column
+`.npz` suffix, for example `KIT/3/upstairs04_poses`. A CSV with a `motion` column
 also works. Converted datasets use `--motions` and their bundled dataset name so
 subject calibration and conversion quality remain available.
 

@@ -16,7 +16,8 @@ mkdir -p "$TERRA_DATA_ROOT/AMASS" "$TERRA_ARTIFACT_ROOT"
 ```
 
 1. Register or sign in at [AMASS Downloads](https://amass.is.tue.mpg.de/download.php),
-   accept its terms, and download a collection in SMPL-H format. Extract it under
+   accept its terms, and download the **KIT collection in SMPL-H format** for the
+   tutorial staircase motion, `KIT/3/upstairs04_poses.npz`. Extract it under
    `$TERRA_DATA_ROOT/AMASS`, retaining the collection/subject/motion directories.
 2. Register or sign in at the [MANO/SMPL-H downloads](https://mano.is.tue.mpg.de/download.php)
    and accept the provider terms. Download **both** the SMPL-H models (the archive
@@ -49,14 +50,15 @@ $TERRA_ARTIFACT_ROOT/
 └── quickstart/                  # created by the quickstart
 ```
 
-Choose an actual archive; the names in the tree are placeholders:
+The tree shows the general layout. Check the recommended tutorial motion:
 
 ```bash
-find "$TERRA_DATA_ROOT/AMASS" -type f -name '*_poses.npz' | head
+export MOTION_FILE="$TERRA_DATA_ROOT/AMASS/KIT/3/upstairs04_poses.npz"
+test -f "$MOTION_FILE"
 test -f "$TERRA_MODEL_ROOT/SMPLH_NEUTRAL.pkl"
 ```
 
-Set `MOTION_FILE` to a line printed by `find`, then use the
+For another motion, set `MOTION_FILE` to its extracted `.npz` path. Then use the
 [README quickstart](../README.md#first-result-retarget-one-smpl-h-motion). The
 [motion-file guide](motion-files.md) explains how to inspect archive fields safely.
 SMPL-H model files must contain the required hand PCA data; an arbitrary AMASS

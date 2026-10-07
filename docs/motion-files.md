@@ -27,11 +27,12 @@ first run, use an existing AMASS `.npz` and skip this fitting stage.
 `mocap_frame_rate`. At least three frames and finite values are required. For AMASS
 `poses`, TERRA tracks the 22-body subset and fills the two hand-root slots with zeros.
 
-After [installation](installation.md), inspect the file with the same loader used by
-retargeting:
+After [installation](installation.md) and [data setup](data.md), inspect the KIT
+tutorial motion with the same loader used by retargeting:
 
 ```bash
-export MOTION_FILE="/absolute/path/to/your/motion_poses.npz"
+export TERRA_DATA_ROOT="$HOME/terra-data"
+export MOTION_FILE="$TERRA_DATA_ROOT/AMASS/KIT/3/upstairs04_poses.npz"
 python - <<'PY'
 import os
 from terra.smplh import load_smplh_motion

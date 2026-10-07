@@ -7,11 +7,13 @@ record beside the trajectory.
 
 ## Run one motion
 
-Complete [installation](installation.md) and [data setup](data.md), then choose an
-existing AMASS-compatible `.npz` motion:
+Complete [installation](installation.md) and [data setup](data.md). Use the KIT
+tutorial staircase motion below, or set `MOTION_FILE` to another AMASS-compatible
+`.npz` motion:
 
 ```bash
-export MOTION_FILE="/absolute/path/to/your/motion_poses.npz"
+export TERRA_DATA_ROOT="$HOME/terra-data"
+export MOTION_FILE="$TERRA_DATA_ROOT/AMASS/KIT/3/upstairs04_poses.npz"
 export TERRA_MODEL_ROOT="$HOME/terra-models/smplh"
 export TERRA_ARTIFACT_ROOT="$HOME/terra-results"
 terra retarget "$MOTION_FILE" \
@@ -24,8 +26,8 @@ The default method is `terra` and the default terrain mode is `auto`. To force f
 ground, add `--terrain none`. To use already known terrain, pass a compatible terrain
 metadata JSON path via `--terrain`. `--name` is the portable identifier inside the
 cache; it may have relative path components. If you omit `--name`, the identifier is
-the input filename without its extension. For example, `upstairs07_poses.npz` becomes
-`upstairs07_poses`. Spaces and other unsupported characters become underscores.
+the input filename without its extension. For example, `upstairs04_poses.npz` becomes
+`upstairs04_poses`. Spaces and other unsupported characters become underscores.
 Use this identifier in the validation and visualization commands below.
 Reusing an output name raises an error
 unless you pass `--overwrite`.
@@ -93,18 +95,18 @@ terra visualize \
   --workers 1
 ```
 
-If you omitted `--name` when retargeting `upstairs07_poses.npz`, use
-`--motion upstairs07_poses` instead. The identifier is relative to the method's
+If you omitted `--name` when retargeting `upstairs04_poses.npz`, use
+`--motion upstairs04_poses` instead. The identifier is relative to the method's
 cache directory. Do not include `.npz`, `MyoFullBody/terra/`, or the input file path.
 Keep `--cache-root` equal to the retarget command's `--output-root`.
 
 Repeat `--motion` to render several motions. For a larger collection, use
 `--manifest /path/to/motions.csv` instead. The CSV needs a `motion` column, with one
-cache identifier per row. For a motion named `upstairs07_poses`, it contains:
+cache identifier per row. For a motion named `upstairs04_poses`, it contains:
 
 ```csv
 motion
-upstairs07_poses
+upstairs04_poses
 ```
 
 Open `$TERRA_ARTIFACT_ROOT/quickstart/videos/INDEX.md` for the MP4 link. The

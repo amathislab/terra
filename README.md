@@ -70,14 +70,17 @@ Pass all needed `--extra` flags together in your final `uv sync` command. See th
 
 This path needs **one AMASS-compatible SMPL-H `.npz` motion** and the licensed **neutral
 SMPL-H model**. [Data setup](docs/data.md) explains where to obtain them and how to
-check the file layout. AMASS motions need no marker conversion. Choose a motion that you
-downloaded, then set its absolute path:
+check the file layout. AMASS motions need no marker conversion. For this tutorial,
+use **`KIT/3/upstairs04_poses.npz`** from the KIT SMPL-H collection. The TERRA-4B
+checkpoint completed all five sampled attempts on this staircase motion in the saved
+evaluation results, with 47 mm mean tracking error. You can also choose another
+downloaded motion by changing `MOTION_FILE`:
 
 ```bash
 export TERRA_DATA_ROOT="$HOME/terra-data"
 export TERRA_MODEL_ROOT="$HOME/terra-models/smplh"
 export TERRA_ARTIFACT_ROOT="$HOME/terra-results"
-export MOTION_FILE="/absolute/path/to/AMASS/Collection/Subject/motion_poses.npz"
+export MOTION_FILE="$TERRA_DATA_ROOT/AMASS/KIT/3/upstairs04_poses.npz"
 
 test -f "$MOTION_FILE"
 test -f "$TERRA_MODEL_ROOT/SMPLH_NEUTRAL.pkl"

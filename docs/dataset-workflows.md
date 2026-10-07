@@ -11,7 +11,7 @@ to the dataset input root and without `.npz`. For an AMASS KIT download:
 
 ```bash
 mkdir -p "$TERRA_ARTIFACT_ROOT/selections"
-printf '%s\n' 'KIT/3/upstairs09_poses' > "$TERRA_ARTIFACT_ROOT/selections/motions.txt"
+printf '%s\n' 'KIT/3/upstairs04_poses' > "$TERRA_ARTIFACT_ROOT/selections/motions.txt"
 terra run amass \
   --selection-manifest "$TERRA_ARTIFACT_ROOT/selections/motions.txt" \
   --cache-root "$TERRA_ARTIFACT_ROOT/quickstart" \

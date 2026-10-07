@@ -531,7 +531,8 @@ def _solve(ctx: SolveContext, retargeter, foot_sticking, robot_dof: int) -> np.n
         Path(scratch.name).unlink(missing_ok=True)
     elapsed = time.perf_counter() - t0
     ctx.diagnostics.retarget_fps = len(qpos) / elapsed if elapsed > 0 else float("inf")
-    logger.info(f"[OK] OmniRetarget: {len(qpos)} frames in {elapsed:.2f}s ({ctx.diagnostics.retarget_fps:.2f} FPS)")
+    method_name = "TERRA" if ctx.config.method_profile == "terra" else "OmniRetarget"
+    logger.info(f"[OK] {method_name}: {len(qpos)} frames in {elapsed:.2f}s ({ctx.diagnostics.retarget_fps:.2f} FPS)")
     relaxed = sorted(retargeter.nonpenetration_relaxed_frames)
     if relaxed:
         logger.warning(

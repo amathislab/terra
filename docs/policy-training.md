@@ -117,14 +117,13 @@ uvx --from huggingface_hub hf auth login
 Download the complete checkpoint at the tested release revision:
 
 ```bash
-export TERRA_ARTIFACT_ROOT="${TERRA_ARTIFACT_ROOT:-$HOME/terra-results}"
 export POLICY_REPO="merc-s/TERRA-4B"
 export POLICY_REVISION="b89a604d0687549f2678bb1b6a436dea058cd8b9"
-export POLICY_CHECKPOINT="$TERRA_ARTIFACT_ROOT/checkpoints/TERRA-4B"
+export POLICY_CHECKPOINT="${TERRA_ARTIFACT_ROOT:-$HOME/terra-results}/checkpoints/TERRA-4B"
 uvx --from huggingface_hub hf download "$POLICY_REPO" \
   --revision "$POLICY_REVISION" \
   --local-dir "$POLICY_CHECKPOINT"
-export POLICY_DATASET="$TERRA_ARTIFACT_ROOT/training/materialization.json"
+export POLICY_DATASET="${TERRA_ARTIFACT_ROOT:-$HOME/terra-results}/training/materialization.json"
 ```
 
 The download contains the complete `checkpoint_24416` directory directly under

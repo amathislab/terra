@@ -99,6 +99,70 @@ output, and rerun without `--dry-run`. Tune the configuration to available GPU m
 checkpoints together. The one-update smoke test checks startup only; it does not
 establish task performance.
 
+## Watch a trained policy
+
+Use [play_policy.py](../scripts/terra/play_policy.py) to load a saved PPO checkpoint
+and a materialized dataset. This runs the policy in native MuJoCo with the motion's
+paired terrain. It uses the checkpoint's network, observations, and control timestep.
+Inference defaults to CPU; CUDA is not required for playback.
+
+Choose a `checkpoint_N` directory from your training run. To locate the one-update
+checkpoint from the startup check above:
+
+```bash
+find "$TERRA_ARTIFACT_ROOT/training/smoke/checkpoints" -type d -name 'checkpoint_1'
+export POLICY_CHECKPOINT="/absolute/path/from/the/list/checkpoint_1"
+```
+
+You can also pass the checkpoint's immediate parent directory. The script selects
+its latest completed checkpoint.
+
+### Open the native MuJoCo GUI
+
+Run this on a machine with a desktop display:
+
+```bash
+python scripts/terra/play_policy.py \
+  --checkpoint "$POLICY_CHECKPOINT" \
+  --materialization-record "$TERRA_ARTIFACT_ROOT/training/materialization.json" \
+  --motion FirstRun/motion
+```
+
+Use the cache identifier from retargeting. For a default-named `upstairs07_poses.npz`,
+replace `FirstRun/motion` with `upstairs07_poses`. Drag the mouse to change the view
+and scroll to zoom. Press Escape to close the current motion's window. The GUI retries
+the motion after a fall or other episode termination, until the step limit is reached.
+
+### Save a video
+
+Add `--video-dir` to save a video instead of opening a window:
+
+```bash
+python scripts/terra/play_policy.py \
+  --checkpoint "$POLICY_CHECKPOINT" \
+  --materialization-record "$TERRA_ARTIFACT_ROOT/training/materialization.json" \
+  --motion FirstRun/motion \
+  --video-dir "$TERRA_ARTIFACT_ROOT/training/policy-videos"
+```
+
+Open `policy-videos/FirstRun/motion/policy.mp4`. The video includes the reference
+motion as a ghost body. Each video stops at the first episode termination, including
+a fall, or at the step limit. Headless recording uses OSMesa; see
+[Optional rendering](installation.md#optional-rendering) for system libraries.
+
+Omit `--motion` to attempt every motion in the selected dataset split, in order.
+Repeat `--motion` to choose several motions. Add `--split evaluation` to use a
+materialized evaluation split. Training is the default split. The materialization
+record must point to an existing cache; it can come from a different compatible
+selection than the training dataset.
+
+`--steps 1000` is the default limit per motion: 10 seconds at the default 100 Hz
+control rate. Increase it for longer motions. Actions use the policy mean by default;
+add `--stochastic` to sample actions. For a checkpoint with multiple training seeds,
+use `--train-state-seed N` to choose the seed. Playback uses validation resets and
+keeps the checkpoint's termination rules. A one-update startup checkpoint can be
+loaded, but it will usually fail to track the motion.
+
 ## Validation options
 
 The production PPO defaults use stochastic validation with at least 100 rollouts.

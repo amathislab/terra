@@ -187,3 +187,20 @@ def test_select_cli_creates_evaluation_rows(monkeypatch, tmp_path):
         "--test-fraction", "0.15",
     ]) == 0
     assert set(split_summary(observed["rows"])["splits"]) == {"train", "evaluation", "test"}
+
+
+def test_training_only_summary_accepts_default_motion_names():
+    rows = [{"motion": "upstairs07_poses", "dataset": "first-run", "split": "train"}]
+    report = split_summary(rows)
+    assert report["splits"] == {"train": 1}
+    assert report["identities"] == 0
+    assert report["unidentified_motions"] == 1
+
+
+def test_holdout_summary_requires_recorded_identities_for_all_motions():
+    rows = [
+        {"motion": "upstairs07_poses", "dataset": "first-run", "split": "train"},
+        {"motion": "KIT/1/walk", "dataset": "amass", "split": "evaluation"},
+    ]
+    with pytest.raises(ValueError, match="no dataset/person identity"):
+        split_summary(rows)

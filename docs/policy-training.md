@@ -17,8 +17,11 @@ lookahead frames. This startup exercise does not establish a useful general poli
 
 First complete the
 [one-motion retarget walkthrough](motion-retargeting.md#run-one-motion) and its
-validation. Select that published motion by its `--name` identifier. The selector
-validates the trajectory and sidecars before writing the manifest:
+validation. Select that published motion by its cache identifier. If you omitted
+`--name` for `upstairs07_poses.npz`, use `--motion upstairs07_poses` below.
+The `--dataset` value is a label for this selection. You do not need to rename
+the cached motion. The selector validates the trajectory and sidecars before
+writing the manifest:
 
 ```bash
 export TERRA_ARTIFACT_ROOT="$HOME/terra-results"
@@ -52,7 +55,10 @@ This one-motion selection has only a training split, so the launcher also uses i
 startup validation. For a real experiment, select a larger, diverse training set and
 a separate evaluation split with `terra train select --evaluation-fraction` before
 segmentation. Keep source identities and their segments in the same split when building a larger
-cohort. Record the selection and materialization report alongside each training run.
+cohort. Automatic evaluation and test splits require identifiers that include the
+dataset and person, such as `KIT/3/upstairs07_poses`. A default filename alone
+does not identify the person. Record the selection and materialization report
+alongside each training run.
 
 ## Check CUDA, then run one update
 

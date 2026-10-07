@@ -241,18 +241,26 @@ def split_summary(rows: Sequence[Mapping[str, str]]) -> dict[str, object]:
     identities: dict[tuple[str, str], set[str]] = defaultdict(set)
     strata: Counter[tuple[str, str, str]] = Counter()
     split_counts: Counter[str] = Counter()
+    has_holdout = any((row.get("split", "train").strip() or "train") != "train" for row in rows)
+    unidentified_motions = 0
     for row in rows:
         split = row.get("split", "train").strip() or "train"
         if split not in {"train", "evaluation", "test"}:
             raise ValueError(f"invalid split {split!r} for {row.get('motion', '')!r}")
-        identities[split_identity(row["motion"])].add(split)
+        motion = row["motion"].strip()
+        # Training-only selections can use the filename chosen by terra retarget.
+        # A holdout requires recorded identities for every motion to check overlap.
+        if motion and "/" not in motion and not has_holdout:
+            unidentified_motions += 1
+        else:
+            identities[split_identity(motion)].add(split)
         dataset, motion_type = _stratum(row)
         strata[(dataset, motion_type, split)] += 1
         split_counts[split] += 1
     leaked = [identity for identity, splits in identities.items() if len(splits) > 1]
     if leaked:
         raise ValueError(f"train/evaluation identity leakage: {leaked[0][1]!r}")
-    return {
+    report = {
         "motions": len(rows),
         "identities": len(identities),
         "splits": dict(sorted(split_counts.items())),
@@ -266,6 +274,9 @@ def split_summary(rows: Sequence[Mapping[str, str]]) -> dict[str, object]:
             for (dataset, motion_type, split), count in sorted(strata.items())
         ],
     }
+    if unidentified_motions:
+        report["unidentified_motions"] = unidentified_motions
+    return report
 
 
 __all__ = [

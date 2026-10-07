@@ -3,6 +3,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from terra._musclemimic import OPTIMIZED_SHAPE_FILE_NAME
 from terra.commands.materialize import materialize_subset
 from terra.commands.selection import (
@@ -307,9 +309,9 @@ def test_training_selection_accepts_only_flat_artifacts_in_flat_mode(monkeypatch
     assert rows[0]["terrain_relpath"] == ""
 
 
-def test_training_selection_cli_accepts_one_validated_retargeted_motion(monkeypatch, tmp_path):
+@pytest.mark.parametrize("motion", ["FirstRun/motion", "upstairs07_poses"])
+def test_training_selection_cli_accepts_one_validated_retargeted_motion(monkeypatch, tmp_path, motion):
     cache = tmp_path / "cache"
-    motion = "FirstRun/motion"
     base = cache / "MyoFullBody/terra" / motion
 
     def validated(root, selected_motion, **kwargs):
@@ -346,7 +348,7 @@ def test_training_selection_cli_accepts_one_validated_retargeted_motion(monkeypa
         rows = list(csv.DictReader(handle))
     assert len(rows) == 1
     assert rows[0]["source_cache_root"] == str(cache)
-    assert rows[0]["trajectory_relpath"] == "MyoFullBody/terra/FirstRun/motion.npz"
+    assert rows[0]["trajectory_relpath"] == f"MyoFullBody/terra/{motion}.npz"
     assert rows[0]["split"] == "train"
 
 

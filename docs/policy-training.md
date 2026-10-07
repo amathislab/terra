@@ -196,11 +196,13 @@ python scripts/terra/play_policy.py \
 ```
 
 Each motion is saved as `$POLICY_VIDEO_DIR/<motion>/policy.mp4`. The video
-shows the policy alone at 1280 × 720, without debug text. Add `--show-reference`
+shows the policy alone at 1920 × 1080, without debug text. Add `--show-reference`
 to overlay the reference motion as a ghost body. Each video stops at the first episode termination, including
 a fall, or at the step limit. Add `--repeat` to record retries until the step limit.
-The scene uses a gray background, steel-blue terrain, and shadows. Muscles are blue
-when inactive and blend toward red as activation rises.
+The scene uses a gray background, steel-blue terrain, a shadow-casting key light,
+and 8-sample anti-aliasing. Bone colors and materials retain the model defaults.
+Muscles use MuJoCo's default actuator palette: dark green when inactive, blending
+toward orange as activation rises.
 Headless recording uses OSMesa; see
 [Optional rendering](installation.md#optional-rendering) for system libraries.
 

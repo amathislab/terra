@@ -106,7 +106,7 @@ def test_playback_preserves_checkpoint_inputs_and_uses_the_new_dataset(
     if video:
         assert params.recorder_params.fps == 100
         assert params.goal_type == ("TerraGoalVisual" if show_reference else "TerraGoal")
-        assert params.viewer_size == [1280, 720]
+        assert params.viewer_size == [1920, 1080]
         assert not params.show_debug_overlay
 
 

@@ -1,4 +1,4 @@
-"""Gray scenes with steel-blue terrain and activation-colored muscles."""
+"""Gray scenes with steel-blue terrain and MuJoCo muscle colors."""
 
 import mujoco
 import numpy as np
@@ -28,9 +28,13 @@ def apply_scene_style(spec: mujoco.MjSpec) -> mujoco.MjSpec:
         rgb2=BACKGROUND,
     )
     spec.visual.rgba.haze = (*BACKGROUND, 0.0)
-    spec.visual.headlight.diffuse = (0.45, 0.45, 0.45)
-    spec.visual.headlight.ambient = (0.25, 0.25, 0.25)
-    spec.visual.quality.shadowsize = 2048
+    spec.visual.headlight.diffuse = (0.4, 0.4, 0.4)
+    spec.visual.headlight.ambient = (0.3, 0.3, 0.3)
+    spec.visual.quality.shadowsize = 4096
+    spec.visual.quality.offsamples = 8
+    spec.visual.quality.numslices = 32
+    spec.visual.quality.numstacks = 16
+    spec.visual.map.shadowscale = 1.0
     floor_materials = {geom.material for geom in spec.geoms if geom.name == "floor"}
     for material in spec.materials:
         if material.name in floor_materials:
@@ -42,16 +46,23 @@ def apply_scene_style(spec: mujoco.MjSpec) -> mujoco.MjSpec:
             geom.rgba = (1.0, 1.0, 1.0, 1.0)
         elif geom.name.startswith("terrain_"):
             geom.rgba = (*STEEL_BLUE, 1.0)
-    for light in spec.lights:
-        light.diffuse = (0.65, 0.65, 0.65)
-        light.specular = (0.05, 0.05, 0.05)
-        light.dir = (-0.4, -0.6, -1.0)
-        light.castshadow = True
+    lights = list(spec.lights)
+    key = lights[0] if lights else spec.worldbody.add_light(name="terra_key")
+    for light in lights[1:]:
+        light.castshadow = False
+    key.type = mujoco.mjtLightType.mjLIGHT_SPOT
+    key.pos = (-3.0, -4.0, 6.0)
+    key.dir = (2.5, 4.4, -4.5)
+    key.mode = mujoco.mjtCamLight.mjCAMLIGHT_TRACKCOM
+    key.cutoff = 40.0
+    key.diffuse = (0.8, 0.8, 0.8)
+    key.specular = (0.1, 0.1, 0.1)
+    key.castshadow = True
     return spec
 
 
 def update_muscle_colors(model: mujoco.MjModel, data: mujoco.MjData) -> None:
-    """Color muscle tendons blue at zero activation and default red at one."""
+    """Use the model's MuJoCo actuator palette for muscle activation."""
     muscles = (
         (model.actuator_dyntype == mujoco.mjtDyn.mjDYN_MUSCLE)
         & (model.actuator_trntype == mujoco.mjtTrn.mjTRN_TENDON)
@@ -59,6 +70,6 @@ def update_muscle_colors(model: mujoco.MjModel, data: mujoco.MjData) -> None:
     )
     tendon_ids = model.actuator_trnid[muscles, 0]
     activation = np.clip(data.act[model.actuator_actadr[muscles]], 0.0, 1.0)[:, None]
-    inactive = np.asarray((0.2, 0.3, 0.95))
-    active = np.asarray((0.95, 0.3, 0.3))
+    inactive = model.vis.rgba.actuator[:3]
+    active = model.vis.rgba.actuatorpositive[:3]
     model.tendon_rgba[tendon_ids, :3] = inactive + activation * (active - inactive)

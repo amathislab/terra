@@ -79,7 +79,7 @@ def playback_config(
             params.goal_params.enable_enhanced_visualization = True
             params.goal_params.target_geom_rgba = list(REFERENCE_RGBA)
         params.show_debug_overlay = False
-        params.viewer_size = [1280, 720]
+        params.viewer_size = [1920, 1080]
         params.default_camera_mode = "follow"
         params.camera_params = {"follow": {"azimuth": 135.0, "elevation": -15.0, "distance": 3.0}}
         params.recorder_params = {

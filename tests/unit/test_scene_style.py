@@ -7,11 +7,8 @@ import pytest
 from terra.visualization.scene import update_muscle_colors
 
 
-@pytest.mark.parametrize(
-    ("activation", "expected"),
-    [(0.0, (0.2, 0.3, 0.95)), (0.5, (0.575, 0.3, 0.625)), (1.0, (0.95, 0.3, 0.3))],
-)
-def test_muscle_activation_colors_preserve_state_and_tendon_opacity(activation, expected):
+@pytest.mark.parametrize("activation", [0.0, 0.5, 1.0])
+def test_muscle_activation_uses_mujoco_colors_and_preserves_state(activation):
     model = mujoco.MjModel.from_xml_string("""
     <mujoco>
       <worldbody><body><joint name="joint"/><geom type="capsule" size="0.1 0.2"/></body></worldbody>
@@ -24,6 +21,9 @@ def test_muscle_activation_colors_preserve_state_and_tendon_opacity(activation, 
     data.act[:] = activation
     state = data.act.copy()
     update_muscle_colors(model, data)
+    expected = model.vis.rgba.actuator[:3] + activation * (
+        model.vis.rgba.actuatorpositive[:3] - model.vis.rgba.actuator[:3]
+    )
     np.testing.assert_allclose(model.tendon_rgba[0, :3], expected)
     np.testing.assert_allclose(model.tendon_rgba[0, 3], 0.7)
     np.testing.assert_array_equal(data.act, state)

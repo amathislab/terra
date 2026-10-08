@@ -6,11 +6,8 @@ musculoskeletal model, and uses the resulting trajectories to train terrain-cond
 PPO policies.
 
 The repository contains the method implementation, command-line tools, configuration
-presets, and end-to-end workflow guides. This code release covers conversion, terrain
+presets, and end-to-end workflow guides. The code covers conversion, terrain
 reconstruction, retargeting, policy training, core evaluation, and visualization.
-Publication figure generation, manuscript analyses, and comparison-only benchmark
-commands are outside this release. Motion datasets and SMPL-H body models have separate
-licenses and must be obtained from their original providers.
 
 [Project website](https://cnai.epfl.ch/terra/) · [Installation](docs/installation.md) · [Data and model setup](docs/data.md) · [Citation](#citation)
 

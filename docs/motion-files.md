@@ -129,6 +129,8 @@ manifest rather than silently dropping them.
 
 ## Convert a dataset
 
+For a complete example, see [Darmstadt download to pre-trained policy playback](dataset-workflows.md#non-amass-dataset-to-a-pre-trained-policy).
+
 Run a converter when you need many recordings, reproducible selection, and conversion
 manifests:
 

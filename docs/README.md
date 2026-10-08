@@ -11,6 +11,8 @@ Before running code, [install TERRA](installation.md) and
 3. [Retarget a motion](motion-retargeting.md).
 4. [Prepare a cohort and train a policy](policy-training.md).
 
+For non-AMASS recordings, follow [Download a dataset and play a pre-trained policy](dataset-workflows.md#non-amass-dataset-to-a-pre-trained-policy).
+
 ## Maintain the project website
 
 Static HTML, CSS, and JavaScript; no build step or external runtime dependencies.

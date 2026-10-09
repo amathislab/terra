@@ -1,0 +1,31 @@
+schema_version = 1
+
+[dataset]
+name = "gait120"
+description = "Gait120 marker/EMG corpus with subject-matched level-walking calibration."
+
+[input]
+root = "runs/gait120/smplh"
+manifest = "runs/gait120/smplh/manifest.csv"
+
+[terrain]
+mode = "fit"
+calibration = "manifest"
+calibration_template = "Gait120/S{subject_padded}/LevelWalking/Trial01/AllSteps_stageii"
+contact_source = "kinematic"
+contact_joints = ["L_Toe", "R_Toe", "L_Ankle", "R_Ankle"]
+calibrate_sites = true
+
+[terrain.fit]
+
+[retarget]
+method = "terra"
+env_name = "MyoFullBody"
+smpl_model_path = "smpl"
+cache_root = "runs/gait120/cache"
+run_root = "runs/gait120/retarget"
+
+[retarget.overrides]
+upper_orient_weight = 0.0
+foot_orient_weight = 0.0
+stance_height_weight = 200.0

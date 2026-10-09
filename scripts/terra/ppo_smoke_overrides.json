@@ -1,0 +1,27 @@
+{
+  "experiment": {
+    "env_params": {
+      "num_envs": 8
+    },
+    "total_timesteps": 320,
+    "total_timesteps_is_absolute": true,
+    "ppo_config": {
+      "num_minibatches": 4
+    },
+    "distributed": {
+      "num_devices": 1
+    },
+    "validation": {
+      "active": false
+    },
+    "save_checkpoints": true,
+    "checkpoint_interval": 1,
+    "max_checkpoints_to_keep": 1,
+    "async_checkpointing": false,
+    "auto_resume": false,
+    "online_logging_interval": 1
+  },
+  "wandb": {
+    "mode": "disabled"
+  }
+}
